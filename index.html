@@ -223,6 +223,38 @@
       gap: 10px;
     }
 
+
+    .weekday-picker {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .weekday-choice {
+      min-width: 0;
+      height: 42px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: white;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 0;
+    }
+
+    .weekday-choice.selected {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .weekday-help {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 7px;
+    }
+
     .event {
       background: var(--card);
       border: 1px solid var(--border);
@@ -790,6 +822,20 @@
           <option value="monthly">Every month</option>
         </select>
 
+        <div id="weekdayPickerWrap">
+          <label>Days</label>
+          <div class="weekday-picker" id="weekdayPicker">
+            <button type="button" class="weekday-choice" data-day="0">Sun</button>
+            <button type="button" class="weekday-choice" data-day="1">Mon</button>
+            <button type="button" class="weekday-choice" data-day="2">Tue</button>
+            <button type="button" class="weekday-choice" data-day="3">Wed</button>
+            <button type="button" class="weekday-choice" data-day="4">Thu</button>
+            <button type="button" class="weekday-choice" data-day="5">Fri</button>
+            <button type="button" class="weekday-choice" data-day="6">Sat</button>
+          </div>
+          <div class="weekday-help">Choose every day this event should happen.</div>
+        </div>
+
       </div>
 
 
@@ -879,6 +925,20 @@
           <option value="biweekly">Every 2 weeks</option>
           <option value="monthly">Every month</option>
         </select>
+
+        <div id="editWeekdayPickerWrap">
+          <label>Days</label>
+          <div class="weekday-picker" id="editWeekdayPicker">
+            <button type="button" class="weekday-choice" data-day="0">Sun</button>
+            <button type="button" class="weekday-choice" data-day="1">Mon</button>
+            <button type="button" class="weekday-choice" data-day="2">Tue</button>
+            <button type="button" class="weekday-choice" data-day="3">Wed</button>
+            <button type="button" class="weekday-choice" data-day="4">Thu</button>
+            <button type="button" class="weekday-choice" data-day="5">Fri</button>
+            <button type="button" class="weekday-choice" data-day="6">Sat</button>
+          </div>
+          <div class="weekday-help">Choose every day this event should happen.</div>
+        </div>
       </div>
 
       <div class="toggle-row">
@@ -1066,6 +1126,8 @@ let editingEventId = null;
 let editingOccurrenceDate = null;
 let editRecurring = false;
 let editReminder = true;
+let selectedWeekdays = [];
+let editSelectedWeekdays = [];
 
 function pad(number) { return String(number).padStart(2, "0"); }
 function dateKey(date) { return date.getFullYear()+"-"+pad(date.getMonth()+1)+"-"+pad(date.getDate()); }
@@ -1082,9 +1144,21 @@ function eventOccursOn(event,key) {
   if(event.seriesEndBefore && key>=event.seriesEndBefore) return false;
   if(Array.isArray(event.exceptions) && event.exceptions.includes(key)) return false;
   if(!event.recurring) return event.date===key;
+
   const difference=Math.round((target-start)/86400000);
-  if(event.repeat==="weekly") return difference%7===0;
-  if(event.repeat==="biweekly") return difference%14===0;
+  const weekdays=Array.isArray(event.weekdays) && event.weekdays.length
+    ? event.weekdays.map(Number)
+    : [start.getDay()];
+
+  if(event.repeat==="weekly") {
+    return weekdays.includes(target.getDay());
+  }
+
+  if(event.repeat==="biweekly") {
+    const weekDifference=Math.floor(difference/7);
+    return weekDifference%2===0 && weekdays.includes(target.getDay());
+  }
+
   if(event.repeat==="monthly") return target.getDate()===start.getDate();
   return false;
 }
@@ -1097,6 +1171,29 @@ function getOwnersForDate(key) {
 function profileMarker(person) {
   const photo=profilePhotos[person], letter=person==="leo"?"L":"R";
   return photo ? `<img class="marker ${person}" src="${photo}" alt="${person}">` : `<span class="marker ${person}">${letter}</span>`;
+}
+
+
+function setWeekdayButtons(containerId, days) {
+  const selected=(days||[]).map(Number);
+  document.querySelectorAll(`#${containerId} .weekday-choice`).forEach(button=>{
+    button.classList.toggle("selected",selected.includes(Number(button.dataset.day)));
+  });
+}
+
+function updateWeekdayPickerVisibility() {
+  const type=document.getElementById("repeatType").value;
+  document.getElementById("weekdayPickerWrap").style.display=(type==="weekly"||type==="biweekly")?"block":"none";
+}
+
+function updateEditWeekdayPickerVisibility() {
+  const type=document.getElementById("editRepeatType").value;
+  document.getElementById("editWeekdayPickerWrap").style.display=(type==="weekly"||type==="biweekly")?"block":"none";
+}
+
+function defaultWeekdayForDate(dateValue) {
+  if(!dateValue)return [];
+  return [parseDate(dateValue).getDay()];
 }
 
 function renderCalendar() {
@@ -1123,7 +1220,14 @@ function renderCalendar() {
 function eventCard(event) {
   let ownerName=event.owner==="rita"?"Rita":event.owner==="both"?"Together":"Leo";
   let timeText=""; if(event.start){timeText=formatTime(event.start);if(event.end)timeText+=" – "+formatTime(event.end);}
-  let repeatText=""; if(event.recurring){if(event.repeat==="weekly")repeatText=" • Weekly";if(event.repeat==="biweekly")repeatText=" • Every 2 weeks";if(event.repeat==="monthly")repeatText=" • Monthly";}
+  let repeatText="";
+  if(event.recurring){
+    const dayNames=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const days=Array.isArray(event.weekdays)&&event.weekdays.length?event.weekdays.map(Number):[parseDate(event.date).getDay()];
+    if(event.repeat==="weekly")repeatText=` • Weekly${days.length?` (${days.map(d=>dayNames[d]).join(", ")})`:""}`;
+    if(event.repeat==="biweekly")repeatText=` • Every 2 weeks${days.length?` (${days.map(d=>dayNames[d]).join(", ")})`:""}`;
+    if(event.repeat==="monthly")repeatText=" • Monthly";
+  }
   return `<div class="event" data-event-id="${event.id}" role="button" tabindex="0"><div class="event-line ${event.owner}"></div><div class="event-info"><div class="event-title">${escapeHTML(event.title)}</div><div class="event-meta">${ownerName}${repeatText}</div>${timeText?`<div class="event-meta">${timeText}</div>`:""}</div><div class="event-action">›</div></div>`;
 }
 function renderEventList(container,key) {
@@ -1153,10 +1257,13 @@ function openAddEvent() {
   document.getElementById("eventDate").value=currentScreen==="calendar"?selectedDate:dateKey(realToday);
   if(currentScreen==="tomorrow"){const t=new Date(realToday);t.setDate(t.getDate()+1);document.getElementById("eventDate").value=dateKey(t);}
   if(currentPerson) document.getElementById("eventOwner").value=currentPerson;
+  selectedWeekdays=defaultWeekdayForDate(document.getElementById("eventDate").value);
+  setWeekdayButtons("weekdayPicker",selectedWeekdays);
+  updateWeekdayPickerVisibility();
 }
 function resetEventForm() {
   ["eventTitle","startTime","endTime","eventNotes"].forEach(id=>document.getElementById(id).value="");
-  document.getElementById("eventOwner").value=currentPerson||"leo"; document.getElementById("repeatType").value="weekly"; recurring=false; reminder=true;
+  document.getElementById("eventOwner").value=currentPerson||"leo"; document.getElementById("repeatType").value="weekly"; recurring=false; reminder=true; selectedWeekdays=[]; setWeekdayButtons("weekdayPicker",selectedWeekdays); updateWeekdayPickerVisibility();
   document.getElementById("recurringToggle").classList.remove("on"); document.getElementById("repeatOptions").classList.remove("show"); document.getElementById("reminderToggle").classList.add("on");
   document.getElementById("reminderDescription").textContent="Automatically on for one-time events.";
 }
@@ -1178,6 +1285,9 @@ function openEditEvent(eventId, occurrenceDate) {
   editingOccurrenceDate=occurrenceDate||event.date;
   editRecurring=!!event.recurring;
   editReminder=!!event.reminder;
+  editSelectedWeekdays=Array.isArray(event.weekdays)&&event.weekdays.length
+    ? event.weekdays.map(Number)
+    : defaultWeekdayForDate(event.date);
 
   document.getElementById("editEventTitle").value=event.title||"";
   document.getElementById("editEventOwner").value=event.owner||"leo";
@@ -1190,6 +1300,8 @@ function openEditEvent(eventId, occurrenceDate) {
     ? `Selected occurrence: ${formatDate(editingOccurrenceDate)}`
     : formatDate(event.date);
   document.getElementById("seriesActions").classList.toggle("show",!!event.recurring);
+  setWeekdayButtons("editWeekdayPicker",editSelectedWeekdays);
+  updateEditWeekdayPickerVisibility();
   setEditToggleUI();
 
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
@@ -1210,6 +1322,10 @@ function readEditForm() {
   if(!title){alert("Give the event a name first.");return null;}
   if(!date){alert("Choose a date.");return null;}
   if(start&&end&&end<=start){alert("The end time needs to be after the start time.");return null;}
+  const repeatType=document.getElementById("editRepeatType").value;
+  if(editRecurring && (repeatType==="weekly"||repeatType==="biweekly") && !editSelectedWeekdays.length){
+    alert("Choose at least one day for this recurring event."); return null;
+  }
   return {
     title,
     owner:document.getElementById("editEventOwner").value,
@@ -1218,7 +1334,8 @@ function readEditForm() {
     end,
     notes:document.getElementById("editEventNotes").value.trim(),
     recurring:editRecurring,
-    repeat:editRecurring?document.getElementById("editRepeatType").value:null,
+    repeat:editRecurring?repeatType:null,
+    weekdays:editRecurring && (repeatType==="weekly"||repeatType==="biweekly") ? [...editSelectedWeekdays] : [],
     reminder:editReminder
   };
 }
@@ -1306,20 +1423,45 @@ async function deleteThisAndFuture() {
   } catch(error){console.error(error);alert("R&L couldn't delete the future occurrences.");}
 }
 
+
+document.querySelectorAll("#weekdayPicker .weekday-choice").forEach(button=>button.addEventListener("click",()=>{
+  const day=Number(button.dataset.day);
+  selectedWeekdays=selectedWeekdays.includes(day)?selectedWeekdays.filter(d=>d!==day):[...selectedWeekdays,day].sort();
+  setWeekdayButtons("weekdayPicker",selectedWeekdays);
+}));
+document.querySelectorAll("#editWeekdayPicker .weekday-choice").forEach(button=>button.addEventListener("click",()=>{
+  const day=Number(button.dataset.day);
+  editSelectedWeekdays=editSelectedWeekdays.includes(day)?editSelectedWeekdays.filter(d=>d!==day):[...editSelectedWeekdays,day].sort();
+  setWeekdayButtons("editWeekdayPicker",editSelectedWeekdays);
+}));
+document.getElementById("repeatType").addEventListener("change",updateWeekdayPickerVisibility);
+document.getElementById("editRepeatType").addEventListener("change",updateEditWeekdayPickerVisibility);
+document.getElementById("eventDate").addEventListener("change",()=>{
+  if(recurring && !selectedWeekdays.length){
+    selectedWeekdays=defaultWeekdayForDate(document.getElementById("eventDate").value);
+    setWeekdayButtons("weekdayPicker",selectedWeekdays);
+  }
+});
+
 document.getElementById("previousMonth").addEventListener("click",()=>{displayedMonth=new Date(displayedMonth.getFullYear(),displayedMonth.getMonth()-1,1);renderCalendar();});
 document.getElementById("nextMonth").addEventListener("click",()=>{displayedMonth=new Date(displayedMonth.getFullYear(),displayedMonth.getMonth()+1,1);renderCalendar();});
 document.querySelectorAll(".nav-btn").forEach(b=>b.addEventListener("click",()=>showScreen(b.dataset.screen)));
 document.getElementById("addEventButton").addEventListener("click",openAddEvent);
 document.getElementById("cancelAdd").addEventListener("click",()=>{resetEventForm();showScreen(currentScreen);});
 document.getElementById("recurringToggle").addEventListener("click",function(){
-  recurring=!recurring;this.classList.toggle("on",recurring);document.getElementById("repeatOptions").classList.toggle("show",recurring);reminder=!recurring;document.getElementById("reminderToggle").classList.toggle("on",reminder);document.getElementById("reminderDescription").textContent=recurring?"Off automatically for recurring events.":"Automatically on for one-time events.";
+  recurring=!recurring;this.classList.toggle("on",recurring);document.getElementById("repeatOptions").classList.toggle("show",recurring);if(recurring&&!selectedWeekdays.length){selectedWeekdays=defaultWeekdayForDate(document.getElementById("eventDate").value);setWeekdayButtons("weekdayPicker",selectedWeekdays);}updateWeekdayPickerVisibility();reminder=!recurring;document.getElementById("reminderToggle").classList.toggle("on",reminder);document.getElementById("reminderDescription").textContent=recurring?"Off automatically for recurring events.":"Automatically on for one-time events.";
 });
 document.getElementById("reminderToggle").addEventListener("click",function(){reminder=!reminder;this.classList.toggle("on",reminder);});
 
 document.getElementById("cancelEdit").addEventListener("click",closeEdit);
 document.getElementById("editRecurringToggle").addEventListener("click",function(){
   editRecurring=!editRecurring;
+  if(editRecurring && !editSelectedWeekdays.length){
+    editSelectedWeekdays=defaultWeekdayForDate(document.getElementById("editEventDate").value);
+    setWeekdayButtons("editWeekdayPicker",editSelectedWeekdays);
+  }
   if(editRecurring && !getEventById(editingEventId)?.recurring) editReminder=false;
+  updateEditWeekdayPickerVisibility();
   setEditToggleUI();
 });
 document.getElementById("editReminderToggle").addEventListener("click",function(){editReminder=!editReminder;setEditToggleUI();});
@@ -1334,9 +1476,11 @@ document.getElementById("saveEvent").addEventListener("click",async()=>{
   if(!currentUser)return;
   const title=document.getElementById("eventTitle").value.trim(), date=document.getElementById("eventDate").value, start=document.getElementById("startTime").value, end=document.getElementById("endTime").value;
   if(!title){alert("Give the event a name first.");return;} if(!date){alert("Choose a date.");return;} if(start&&end&&end<=start){alert("The end time needs to be after the start time.");return;}
+  const repeatType=document.getElementById("repeatType").value;
+  if(recurring && (repeatType==="weekly"||repeatType==="biweekly") && !selectedWeekdays.length){alert("Choose at least one day for this recurring event.");return;}
   const button=document.getElementById("saveEvent"); button.disabled=true; button.textContent="Saving…";
   try {
-    await addDoc(collection(db,"events"),{title,owner:document.getElementById("eventOwner").value,date,start,end,notes:document.getElementById("eventNotes").value.trim(),recurring,repeat:recurring?document.getElementById("repeatType").value:null,reminder,exceptions:[],createdBy:currentUser.uid,createdAt:serverTimestamp()});
+    await addDoc(collection(db,"events"),{title,owner:document.getElementById("eventOwner").value,date,start,end,notes:document.getElementById("eventNotes").value.trim(),recurring,repeat:recurring?repeatType:null,weekdays:recurring&&(repeatType==="weekly"||repeatType==="biweekly")?[...selectedWeekdays]:[],reminder,exceptions:[],createdBy:currentUser.uid,createdAt:serverTimestamp()});
     selectedDate=date; const selected=parseDate(date); displayedMonth=new Date(selected.getFullYear(),selected.getMonth(),1); resetEventForm(); showScreen("calendar");
   } catch(error){console.error(error);alert("R&L couldn't save that event. Check your Firestore rules and internet connection.");}
   finally {button.disabled=false;button.textContent="Add to R&L";}
