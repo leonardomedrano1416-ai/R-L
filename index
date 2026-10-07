@@ -1,0 +1,2122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#fffaf4" />
+
+  <title>R&L</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg: #fffaf4;
+      --card: #ffffff;
+      --text: #28231f;
+      --muted: #8c8178;
+      --border: #eee5dc;
+      --accent: #a86d56;
+      --accent-soft: #f4e5dc;
+      --leo: #6e8ca6;
+      --rita: #bd7f8f;
+      --both: #9b7ba5;
+      --danger: #b84c4c;
+      --shadow: 0 8px 28px rgba(63, 45, 34, 0.08);
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app {
+      width: min(100%, 620px);
+      margin: 0 auto;
+      padding: 18px 16px 110px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .brand {
+      font-size: 29px;
+      font-weight: 800;
+      letter-spacing: -1px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .icon-btn {
+      border: 1px solid var(--border);
+      background: var(--card);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      font-size: 20px;
+    }
+
+    .screen {
+      display: none;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    .calendar-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .calendar-header h2 {
+      margin: 0;
+      font-size: 21px;
+    }
+
+    .month-buttons {
+      display: flex;
+      gap: 7px;
+    }
+
+    .month-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: white;
+      font-size: 20px;
+    }
+
+    .weekdays,
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+    }
+
+    .weekday {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      padding-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .day {
+      position: relative;
+      min-height: 59px;
+      border: 0;
+      background: transparent;
+      border-radius: 14px;
+      color: var(--text);
+      padding: 7px 2px 19px;
+    }
+
+    .day.today {
+      outline: 2px solid var(--accent);
+      font-weight: 800;
+    }
+
+    .day.selected {
+      background: var(--accent-soft);
+    }
+
+    .day.other {
+      opacity: 0.3;
+    }
+
+    .markers {
+      position: absolute;
+      bottom: 5px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .marker {
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      border: 2px solid white;
+      object-fit: cover;
+      display: grid;
+      place-items: center;
+      font-size: 8px;
+      font-weight: 800;
+      color: white;
+      overflow: hidden;
+    }
+
+    .marker + .marker {
+      margin-left: -6px;
+    }
+
+    .marker.leo {
+      background: var(--leo);
+    }
+
+    .marker.rita {
+      background: var(--rita);
+    }
+
+    .selected-section {
+      margin-top: 20px;
+    }
+
+    .section-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .section-heading h3 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    .small-muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .event-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .event {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .event-line {
+      width: 5px;
+      align-self: stretch;
+      border-radius: 10px;
+    }
+
+    .event-line.leo {
+      background: var(--leo);
+    }
+
+    .event-line.rita {
+      background: var(--rita);
+    }
+
+    .event-line.both {
+      background: var(--both);
+    }
+
+    .event-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .event-title {
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .event-meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .empty {
+      padding: 30px 15px;
+      text-align: center;
+      color: var(--muted);
+      background: rgba(255,255,255,.55);
+      border-radius: 18px;
+      border: 1px dashed var(--border);
+    }
+
+    .agenda-title {
+      margin-bottom: 18px;
+    }
+
+    .agenda-title h2 {
+      margin: 0 0 4px;
+      font-size: 28px;
+    }
+
+    .form-card,
+    .settings-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+
+    .form-card h2,
+    .settings-card h2 {
+      margin-top: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin: 15px 0 6px;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      min-height: 48px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: white;
+      padding: 11px 12px;
+      color: var(--text);
+      font-size: 16px;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .two-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-top: 17px;
+    }
+
+    .toggle-copy strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .toggle-copy span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .toggle {
+      width: 50px;
+      height: 29px;
+      border-radius: 20px;
+      background: #ddd4ce;
+      border: none;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .toggle::after {
+      content: "";
+      position: absolute;
+      width: 23px;
+      height: 23px;
+      background: white;
+      border-radius: 50%;
+      top: 3px;
+      left: 3px;
+      transition: .2s;
+      box-shadow: 0 2px 5px rgba(0,0,0,.15);
+    }
+
+    .toggle.on {
+      background: var(--accent);
+    }
+
+    .toggle.on::after {
+      left: 24px;
+    }
+
+    .primary-btn {
+      width: 100%;
+      border: none;
+      border-radius: 14px;
+      min-height: 51px;
+      background: var(--accent);
+      color: white;
+      font-weight: 800;
+      margin-top: 20px;
+    }
+
+    .secondary-btn {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      min-height: 44px;
+      padding: 0 14px;
+      background: white;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .danger-btn {
+      color: var(--danger);
+    }
+
+    .profile-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0;
+    }
+
+    .profile-row + .profile-row {
+      border-top: 1px solid var(--border);
+    }
+
+    .profile-photo {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 19px;
+      font-weight: 800;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .profile-photo.leo {
+      background: var(--leo);
+    }
+
+    .profile-photo.rita {
+      background: var(--rita);
+    }
+
+    .profile-details {
+      flex: 1;
+    }
+
+    .profile-name {
+      font-weight: 800;
+    }
+
+    .photo-input {
+      display: none;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(100%, 620px);
+      background: rgba(255,250,244,.96);
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 68px;
+      gap: 5px;
+      padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
+      z-index: 50;
+      backdrop-filter: blur(14px);
+    }
+
+    .nav-btn {
+      border: none;
+      background: transparent;
+      min-height: 52px;
+      border-radius: 13px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .nav-btn.active {
+      background: var(--accent-soft);
+      color: var(--text);
+    }
+
+    .add-btn {
+      border: none;
+      background: var(--accent);
+      color: white;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      font-size: 29px;
+      justify-self: end;
+      box-shadow: var(--shadow);
+    }
+
+    .back-btn {
+      border: none;
+      background: none;
+      padding: 5px 0;
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .repeat-options {
+      display: none;
+    }
+
+    .repeat-options.show {
+      display: block;
+    }
+
+    @media (max-width: 390px) {
+      .app {
+        padding-left: 11px;
+        padding-right: 11px;
+      }
+
+      .calendar-card {
+        padding: 13px 9px;
+      }
+
+      .day {
+        min-height: 55px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div>
+      <div class="brand">R&amp;L</div>
+      <div class="subtitle">Our life, in sync.</div>
+    </div>
+
+    <button class="icon-btn" id="settingsButton" aria-label="Settings">
+      ⚙︎
+    </button>
+  </header>
+
+
+  <!-- CALENDAR -->
+  <section id="calendarScreen" class="screen active">
+
+    <div class="calendar-card">
+
+      <div class="calendar-header">
+        <h2 id="monthTitle"></h2>
+
+        <div class="month-buttons">
+          <button class="month-btn" id="previousMonth">‹</button>
+          <button class="month-btn" id="nextMonth">›</button>
+        </div>
+      </div>
+
+      <div class="weekdays">
+        <div class="weekday">Sun</div>
+        <div class="weekday">Mon</div>
+        <div class="weekday">Tue</div>
+        <div class="weekday">Wed</div>
+        <div class="weekday">Thu</div>
+        <div class="weekday">Fri</div>
+        <div class="weekday">Sat</div>
+      </div>
+
+      <div id="calendarGrid" class="calendar-grid"></div>
+
+    </div>
+
+    <div class="selected-section">
+
+      <div class="section-heading">
+        <div>
+          <div class="small-muted">Selected day</div>
+          <h3 id="selectedDateTitle"></h3>
+        </div>
+      </div>
+
+      <div id="selectedEvents" class="event-list"></div>
+
+    </div>
+
+  </section>
+
+
+  <!-- TODAY -->
+  <section id="todayScreen" class="screen">
+
+    <div class="agenda-title">
+      <h2>Today</h2>
+      <div id="todayDate" class="small-muted"></div>
+    </div>
+
+    <div id="todayEvents" class="event-list"></div>
+
+  </section>
+
+
+  <!-- TOMORROW -->
+  <section id="tomorrowScreen" class="screen">
+
+    <div class="agenda-title">
+      <h2>Tomorrow</h2>
+      <div id="tomorrowDate" class="small-muted"></div>
+    </div>
+
+    <div id="tomorrowEvents" class="event-list"></div>
+
+  </section>
+
+
+  <!-- ADD EVENT -->
+  <section id="addScreen" class="screen">
+
+    <button class="back-btn" id="cancelAdd">← Cancel</button>
+
+    <div class="form-card">
+
+      <h2>Add Event</h2>
+
+      <label for="eventTitle">What's happening?</label>
+      <input
+        id="eventTitle"
+        type="text"
+        placeholder="Work, clinical, appointment..."
+      />
+
+      <label for="eventOwner">Who?</label>
+      <select id="eventOwner">
+        <option value="leo">Leo</option>
+        <option value="rita">Rita</option>
+        <option value="both">Both of us</option>
+      </select>
+
+      <label for="eventDate">Date</label>
+      <input id="eventDate" type="date" />
+
+      <div class="two-columns">
+
+        <div>
+          <label for="startTime">Starts</label>
+          <input id="startTime" type="time" />
+        </div>
+
+        <div>
+          <label for="endTime">Ends</label>
+          <input id="endTime" type="time" />
+        </div>
+
+      </div>
+
+
+      <div class="toggle-row">
+
+        <div class="toggle-copy">
+          <strong>Recurring event</strong>
+          <span>Repeat this automatically.</span>
+        </div>
+
+        <button
+          type="button"
+          class="toggle"
+          id="recurringToggle"
+          aria-label="Recurring event"
+        ></button>
+
+      </div>
+
+
+      <div id="repeatOptions" class="repeat-options">
+
+        <label for="repeatType">Repeat</label>
+
+        <select id="repeatType">
+          <option value="weekly">Every week</option>
+          <option value="biweekly">Every 2 weeks</option>
+          <option value="monthly">Every month</option>
+        </select>
+
+      </div>
+
+
+      <div class="toggle-row">
+
+        <div class="toggle-copy">
+          <strong>Remind us 1 day before</strong>
+          <span id="reminderDescription">
+            Automatically on for one-time events.
+          </span>
+        </div>
+
+        <button
+          type="button"
+          class="toggle on"
+          id="reminderToggle"
+          aria-label="Reminder"
+        ></button>
+
+      </div>
+
+
+      <label for="eventNotes">Notes</label>
+
+      <textarea
+        id="eventNotes"
+        placeholder="Anything else we should know?"
+      ></textarea>
+
+
+      <button class="primary-btn" id="saveEvent">
+        Add to R&amp;L
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- SETTINGS -->
+  <section id="settingsScreen" class="screen">
+
+    <button class="back-btn" id="closeSettings">
+      ← Calendar
+    </button>
+
+    <div class="settings-card">
+
+      <h2>Customize Profiles</h2>
+
+      <p class="small-muted">
+        Your pictures appear on calendar days when you have something scheduled.
+      </p>
+
+
+      <!-- LEO -->
+      <div class="profile-row">
+
+        <div id="leoPhotoPreview" class="profile-photo leo">
+          L
+        </div>
+
+        <div class="profile-details">
+          <div class="profile-name">Leo</div>
+          <div class="small-muted">Your calendar profile</div>
+        </div>
+
+        <button
+          class="secondary-btn"
+          id="changeLeoPhoto"
+        >
+          Change
+        </button>
+
+        <input
+          type="file"
+          accept="image/*"
+          id="leoPhotoInput"
+          class="photo-input"
+        />
+
+      </div>
+
+
+      <!-- RITA -->
+      <div class="profile-row">
+
+        <div id="ritaPhotoPreview" class="profile-photo rita">
+          R
+        </div>
+
+        <div class="profile-details">
+          <div class="profile-name">Rita</div>
+          <div class="small-muted">Her calendar profile</div>
+        </div>
+
+        <button
+          class="secondary-btn"
+          id="changeRitaPhoto"
+        >
+          Change
+        </button>
+
+        <input
+          type="file"
+          accept="image/*"
+          id="ritaPhotoInput"
+          class="photo-input"
+        />
+
+      </div>
+
+    </div>
+
+  </section>
+
+</div>
+
+
+<!-- NAVIGATION -->
+
+<nav class="bottom-nav" id="bottomNav">
+
+  <button class="nav-btn active" data-screen="calendar">
+    Calendar
+  </button>
+
+  <button class="nav-btn" data-screen="today">
+    Today
+  </button>
+
+  <button class="nav-btn" data-screen="tomorrow">
+    Tomorrow
+  </button>
+
+  <button class="add-btn" id="addEventButton">
+    +
+  </button>
+
+</nav>
+
+
+<script>
+
+const STORAGE_EVENTS = "rl_events_v1";
+const STORAGE_LEO_PHOTO = "rl_leo_photo";
+const STORAGE_RITA_PHOTO = "rl_rita_photo";
+
+
+let events =
+  JSON.parse(localStorage.getItem(STORAGE_EVENTS) || "[]");
+
+
+let profilePhotos = {
+  leo: localStorage.getItem(STORAGE_LEO_PHOTO),
+  rita: localStorage.getItem(STORAGE_RITA_PHOTO)
+};
+
+
+const realToday = new Date();
+
+realToday.setHours(0, 0, 0, 0);
+
+
+let displayedMonth =
+  new Date(
+    realToday.getFullYear(),
+    realToday.getMonth(),
+    1
+  );
+
+
+let selectedDate = dateKey(realToday);
+
+
+let recurring = false;
+let reminder = true;
+let currentScreen = "calendar";
+
+
+function pad(number) {
+  return String(number).padStart(2, "0");
+}
+
+
+function dateKey(date) {
+
+  return (
+    date.getFullYear() +
+    "-" +
+    pad(date.getMonth() + 1) +
+    "-" +
+    pad(date.getDate())
+  );
+
+}
+
+
+function parseDate(key) {
+
+  const parts = key.split("-").map(Number);
+
+  return new Date(
+    parts[0],
+    parts[1] - 1,
+    parts[2]
+  );
+
+}
+
+
+function formatDate(key) {
+
+  return parseDate(key).toLocaleDateString(
+    "en-US",
+    {
+      weekday: "long",
+      month: "long",
+      day: "numeric"
+    }
+  );
+
+}
+
+
+function formatTime(time) {
+
+  if (!time) return "";
+
+  const [hours, minutes] =
+    time.split(":").map(Number);
+
+  const date =
+    new Date(2000, 0, 1, hours, minutes);
+
+  return date.toLocaleTimeString(
+    "en-US",
+    {
+      hour: "numeric",
+      minute: "2-digit"
+    }
+  );
+
+}
+
+
+function escapeHTML(text) {
+
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+}
+
+
+function saveEvents() {
+
+  localStorage.setItem(
+    STORAGE_EVENTS,
+    JSON.stringify(events)
+  );
+
+}
+
+
+function eventOccursOn(event, key) {
+
+  const target = parseDate(key);
+  const start = parseDate(event.date);
+
+  if (target < start) return false;
+
+
+  if (!event.recurring) {
+    return event.date === key;
+  }
+
+
+  const difference =
+    Math.round(
+      (target - start) / 86400000
+    );
+
+
+  if (event.repeat === "weekly") {
+    return difference % 7 === 0;
+  }
+
+
+  if (event.repeat === "biweekly") {
+    return difference % 14 === 0;
+  }
+
+
+  if (event.repeat === "monthly") {
+
+    return (
+      target.getDate() ===
+      start.getDate()
+    );
+
+  }
+
+
+  return false;
+
+}
+
+
+function eventsForDate(key) {
+
+  return events
+    .filter(event =>
+      eventOccursOn(event, key)
+    )
+    .sort((a, b) =>
+      (a.start || "99:99")
+        .localeCompare(
+          b.start || "99:99"
+        )
+    );
+
+}
+
+
+function getOwnersForDate(key) {
+
+  const dayEvents =
+    eventsForDate(key);
+
+  let leo = false;
+  let rita = false;
+
+
+  dayEvents.forEach(event => {
+
+    if (
+      event.owner === "leo" ||
+      event.owner === "both"
+    ) {
+      leo = true;
+    }
+
+    if (
+      event.owner === "rita" ||
+      event.owner === "both"
+    ) {
+      rita = true;
+    }
+
+  });
+
+
+  return { leo, rita };
+
+}
+
+
+function profileMarker(person) {
+
+  const photo =
+    profilePhotos[person];
+
+  const letter =
+    person === "leo" ? "L" : "R";
+
+
+  if (photo) {
+
+    return `
+      <img
+        class="marker ${person}"
+        src="${photo}"
+        alt="${person}"
+      >
+    `;
+
+  }
+
+
+  return `
+    <span class="marker ${person}">
+      ${letter}
+    </span>
+  `;
+
+}
+
+
+function renderCalendar() {
+
+  const grid =
+    document.getElementById(
+      "calendarGrid"
+    );
+
+
+  grid.innerHTML = "";
+
+
+  const year =
+    displayedMonth.getFullYear();
+
+  const month =
+    displayedMonth.getMonth();
+
+
+  document.getElementById(
+    "monthTitle"
+  ).textContent =
+    displayedMonth.toLocaleDateString(
+      "en-US",
+      {
+        month: "long",
+        year: "numeric"
+      }
+    );
+
+
+  const firstDay =
+    new Date(year, month, 1);
+
+  const startingWeekday =
+    firstDay.getDay();
+
+  const numberOfDays =
+    new Date(
+      year,
+      month + 1,
+      0
+    ).getDate();
+
+
+  for (
+    let i = 0;
+    i < startingWeekday;
+    i++
+  ) {
+
+    const blank =
+      document.createElement("div");
+
+    grid.appendChild(blank);
+
+  }
+
+
+  for (
+    let day = 1;
+    day <= numberOfDays;
+    day++
+  ) {
+
+    const date =
+      new Date(year, month, day);
+
+    const key =
+      dateKey(date);
+
+
+    const button =
+      document.createElement("button");
+
+
+    button.type = "button";
+    button.className = "day";
+
+
+    if (key === dateKey(realToday)) {
+      button.classList.add("today");
+    }
+
+
+    if (key === selectedDate) {
+      button.classList.add("selected");
+    }
+
+
+    const owners =
+      getOwnersForDate(key);
+
+
+    let markers = "";
+
+
+    if (owners.leo) {
+      markers +=
+        profileMarker("leo");
+    }
+
+
+    if (owners.rita) {
+      markers +=
+        profileMarker("rita");
+    }
+
+
+    button.innerHTML = `
+      <span>${day}</span>
+
+      ${
+        markers
+          ? `<div class="markers">
+              ${markers}
+             </div>`
+          : ""
+      }
+    `;
+
+
+    button.addEventListener(
+      "click",
+      () => {
+
+        selectedDate = key;
+
+        renderCalendar();
+        renderSelectedDate();
+
+      }
+    );
+
+
+    grid.appendChild(button);
+
+  }
+
+
+  renderSelectedDate();
+
+}
+
+
+function eventCard(event) {
+
+  let ownerName = "Leo";
+
+  if (event.owner === "rita") {
+    ownerName = "Rita";
+  }
+
+  if (event.owner === "both") {
+    ownerName = "Together";
+  }
+
+
+  let timeText = "";
+
+  if (event.start) {
+
+    timeText =
+      formatTime(event.start);
+
+    if (event.end) {
+
+      timeText +=
+        " – " +
+        formatTime(event.end);
+
+    }
+
+  }
+
+
+  let repeatText = "";
+
+  if (event.recurring) {
+
+    if (event.repeat === "weekly") {
+      repeatText = " • Weekly";
+    }
+
+    if (event.repeat === "biweekly") {
+      repeatText =
+        " • Every 2 weeks";
+    }
+
+    if (event.repeat === "monthly") {
+      repeatText = " • Monthly";
+    }
+
+  }
+
+
+  return `
+    <div class="event">
+
+      <div
+        class="event-line ${event.owner}"
+      ></div>
+
+      <div class="event-info">
+
+        <div class="event-title">
+          ${escapeHTML(event.title)}
+        </div>
+
+        <div class="event-meta">
+          ${ownerName}
+          ${repeatText}
+        </div>
+
+        ${
+          timeText
+            ? `<div class="event-meta">
+                ${timeText}
+               </div>`
+            : ""
+        }
+
+      </div>
+
+    </div>
+  `;
+
+}
+
+
+function renderEventList(
+  container,
+  key
+) {
+
+  const dayEvents =
+    eventsForDate(key);
+
+
+  if (!dayEvents.length) {
+
+    container.innerHTML = `
+      <div class="empty">
+        Nothing scheduled.
+      </div>
+    `;
+
+    return;
+
+  }
+
+
+  container.innerHTML =
+    dayEvents
+      .map(eventCard)
+      .join("");
+
+}
+
+
+function renderSelectedDate() {
+
+  document.getElementById(
+    "selectedDateTitle"
+  ).textContent =
+    formatDate(selectedDate);
+
+
+  renderEventList(
+    document.getElementById(
+      "selectedEvents"
+    ),
+    selectedDate
+  );
+
+}
+
+
+function renderAgenda() {
+
+  const todayKey =
+    dateKey(realToday);
+
+
+  const tomorrow =
+    new Date(realToday);
+
+  tomorrow.setDate(
+    tomorrow.getDate() + 1
+  );
+
+
+  const tomorrowKey =
+    dateKey(tomorrow);
+
+
+  document.getElementById(
+    "todayDate"
+  ).textContent =
+    formatDate(todayKey);
+
+
+  document.getElementById(
+    "tomorrowDate"
+  ).textContent =
+    formatDate(tomorrowKey);
+
+
+  renderEventList(
+    document.getElementById(
+      "todayEvents"
+    ),
+    todayKey
+  );
+
+
+  renderEventList(
+    document.getElementById(
+      "tomorrowEvents"
+    ),
+    tomorrowKey
+  );
+
+}
+
+
+function showScreen(name) {
+
+  currentScreen = name;
+
+
+  document
+    .querySelectorAll(".screen")
+    .forEach(screen => {
+
+      screen.classList.remove(
+        "active"
+      );
+
+    });
+
+
+  document.getElementById(
+    name + "Screen"
+  ).classList.add("active");
+
+
+  document
+    .querySelectorAll(".nav-btn")
+    .forEach(button => {
+
+      button.classList.toggle(
+        "active",
+        button.dataset.screen === name
+      );
+
+    });
+
+
+  if (name === "calendar") {
+    renderCalendar();
+  }
+
+
+  if (
+    name === "today" ||
+    name === "tomorrow"
+  ) {
+    renderAgenda();
+  }
+
+}
+
+
+function openAddEvent() {
+
+  document
+    .querySelectorAll(".screen")
+    .forEach(screen =>
+      screen.classList.remove(
+        "active"
+      )
+    );
+
+
+  document.getElementById(
+    "addScreen"
+  ).classList.add("active");
+
+
+  document.getElementById(
+    "eventDate"
+  ).value =
+    currentScreen === "calendar"
+      ? selectedDate
+      : dateKey(realToday);
+
+
+  if (
+    currentScreen === "tomorrow"
+  ) {
+
+    const tomorrow =
+      new Date(realToday);
+
+    tomorrow.setDate(
+      tomorrow.getDate() + 1
+    );
+
+    document.getElementById(
+      "eventDate"
+    ).value =
+      dateKey(tomorrow);
+
+  }
+
+}
+
+
+function resetEventForm() {
+
+  document.getElementById(
+    "eventTitle"
+  ).value = "";
+
+  document.getElementById(
+    "startTime"
+  ).value = "";
+
+  document.getElementById(
+    "endTime"
+  ).value = "";
+
+  document.getElementById(
+    "eventNotes"
+  ).value = "";
+
+  document.getElementById(
+    "eventOwner"
+  ).value = "leo";
+
+  document.getElementById(
+    "repeatType"
+  ).value = "weekly";
+
+
+  recurring = false;
+  reminder = true;
+
+
+  document.getElementById(
+    "recurringToggle"
+  ).classList.remove("on");
+
+
+  document.getElementById(
+    "repeatOptions"
+  ).classList.remove("show");
+
+
+  document.getElementById(
+    "reminderToggle"
+  ).classList.add("on");
+
+
+  document.getElementById(
+    "reminderDescription"
+  ).textContent =
+    "Automatically on for one-time events.";
+
+}
+
+
+document.getElementById(
+  "previousMonth"
+).addEventListener(
+  "click",
+  () => {
+
+    displayedMonth =
+      new Date(
+        displayedMonth.getFullYear(),
+        displayedMonth.getMonth() - 1,
+        1
+      );
+
+    renderCalendar();
+
+  }
+);
+
+
+document.getElementById(
+  "nextMonth"
+).addEventListener(
+  "click",
+  () => {
+
+    displayedMonth =
+      new Date(
+        displayedMonth.getFullYear(),
+        displayedMonth.getMonth() + 1,
+        1
+      );
+
+    renderCalendar();
+
+  }
+);
+
+
+document
+  .querySelectorAll(".nav-btn")
+  .forEach(button => {
+
+    button.addEventListener(
+      "click",
+      () => {
+
+        showScreen(
+          button.dataset.screen
+        );
+
+      }
+    );
+
+  });
+
+
+document.getElementById(
+  "addEventButton"
+).addEventListener(
+  "click",
+  openAddEvent
+);
+
+
+document.getElementById(
+  "cancelAdd"
+).addEventListener(
+  "click",
+  () => {
+
+    resetEventForm();
+    showScreen(currentScreen);
+
+  }
+);
+
+
+document.getElementById(
+  "recurringToggle"
+).addEventListener(
+  "click",
+  function () {
+
+    recurring = !recurring;
+
+    this.classList.toggle(
+      "on",
+      recurring
+    );
+
+
+    document.getElementById(
+      "repeatOptions"
+    ).classList.toggle(
+      "show",
+      recurring
+    );
+
+
+    /*
+      Our rule:
+      One-time = reminder ON.
+      Recurring = reminder OFF.
+    */
+
+    reminder = !recurring;
+
+
+    document.getElementById(
+      "reminderToggle"
+    ).classList.toggle(
+      "on",
+      reminder
+    );
+
+
+    document.getElementById(
+      "reminderDescription"
+    ).textContent =
+      recurring
+        ? "Off automatically for recurring events."
+        : "Automatically on for one-time events.";
+
+  }
+);
+
+
+document.getElementById(
+  "reminderToggle"
+).addEventListener(
+  "click",
+  function () {
+
+    reminder = !reminder;
+
+    this.classList.toggle(
+      "on",
+      reminder
+    );
+
+  }
+);
+
+
+document.getElementById(
+  "saveEvent"
+).addEventListener(
+  "click",
+  () => {
+
+    const title =
+      document.getElementById(
+        "eventTitle"
+      ).value.trim();
+
+
+    const date =
+      document.getElementById(
+        "eventDate"
+      ).value;
+
+
+    const start =
+      document.getElementById(
+        "startTime"
+      ).value;
+
+
+    const end =
+      document.getElementById(
+        "endTime"
+      ).value;
+
+
+    if (!title) {
+
+      alert(
+        "Give the event a name first."
+      );
+
+      return;
+
+    }
+
+
+    if (!date) {
+
+      alert(
+        "Choose a date."
+      );
+
+      return;
+
+    }
+
+
+    if (
+      start &&
+      end &&
+      end <= start
+    ) {
+
+      alert(
+        "The end time needs to be after the start time."
+      );
+
+      return;
+
+    }
+
+
+    const event = {
+
+      id:
+        Date.now().toString(),
+
+      title,
+
+      owner:
+        document.getElementById(
+          "eventOwner"
+        ).value,
+
+      date,
+
+      start,
+
+      end,
+
+      notes:
+        document.getElementById(
+          "eventNotes"
+        ).value.trim(),
+
+      recurring,
+
+      repeat:
+        recurring
+          ? document.getElementById(
+              "repeatType"
+            ).value
+          : null,
+
+      reminder,
+
+      exceptions: []
+
+    };
+
+
+    events.push(event);
+
+    saveEvents();
+
+
+    selectedDate = date;
+
+
+    const selected =
+      parseDate(date);
+
+
+    displayedMonth =
+      new Date(
+        selected.getFullYear(),
+        selected.getMonth(),
+        1
+      );
+
+
+    resetEventForm();
+
+    showScreen("calendar");
+
+  }
+);
+
+
+/*
+  SETTINGS
+*/
+
+document.getElementById(
+  "settingsButton"
+).addEventListener(
+  "click",
+  () => {
+
+    document
+      .querySelectorAll(".screen")
+      .forEach(screen =>
+        screen.classList.remove(
+          "active"
+        )
+      );
+
+
+    document.getElementById(
+      "settingsScreen"
+    ).classList.add("active");
+
+  }
+);
+
+
+document.getElementById(
+  "closeSettings"
+).addEventListener(
+  "click",
+  () => {
+
+    showScreen("calendar");
+
+  }
+);
+
+
+/*
+  PROFILE PHOTOS
+*/
+
+function renderProfilePhotos() {
+
+  const leo =
+    document.getElementById(
+      "leoPhotoPreview"
+    );
+
+  const rita =
+    document.getElementById(
+      "ritaPhotoPreview"
+    );
+
+
+  if (profilePhotos.leo) {
+
+    leo.innerHTML = `
+      <img
+        src="${profilePhotos.leo}"
+        style="
+          width:100%;
+          height:100%;
+          object-fit:cover;
+        "
+        alt="Leo"
+      `;
+
+  } else {
+
+    leo.textContent = "L";
+
+  }
+
+
+  if (profilePhotos.rita) {
+
+    rita.innerHTML = `
+      <img
+        src="${profilePhotos.rita}"
+        style="
+          width:100%;
+          height:100%;
+          object-fit:cover;
+        "
+        alt="Rita"
+      `;
+
+  } else {
+
+    rita.textContent = "R";
+
+  }
+
+}
+
+
+function handlePhoto(
+  person,
+  file
+) {
+
+  if (!file) return;
+
+
+  if (!file.type.startsWith("image/")) {
+
+    alert(
+      "Please choose a picture."
+    );
+
+    return;
+
+  }
+
+
+  const reader =
+    new FileReader();
+
+
+  reader.onload =
+    event => {
+
+      const image =
+        new Image();
+
+
+      image.onload = () => {
+
+        /*
+          Resize the photo so local storage
+          doesn't get filled by a huge
+          iPhone photo.
+        */
+
+        const canvas =
+          document.createElement(
+            "canvas"
+          );
+
+
+        const size = 350;
+
+        canvas.width = size;
+        canvas.height = size;
+
+
+        const ctx =
+          canvas.getContext("2d");
+
+
+        const sourceSize =
+          Math.min(
+            image.width,
+            image.height
+          );
+
+
+        const sourceX =
+          (image.width -
+            sourceSize) / 2;
+
+
+        const sourceY =
+          (image.height -
+            sourceSize) / 2;
+
+
+        ctx.drawImage(
+          image,
+          sourceX,
+          sourceY,
+          sourceSize,
+          sourceSize,
+          0,
+          0,
+          size,
+          size
+        );
+
+
+        const compressed =
+          canvas.toDataURL(
+            "image/jpeg",
+            0.78
+          );
+
+
+        profilePhotos[person] =
+          compressed;
+
+
+        if (person === "leo") {
+
+          localStorage.setItem(
+            STORAGE_LEO_PHOTO,
+            compressed
+          );
+
+        } else {
+
+          localStorage.setItem(
+            STORAGE_RITA_PHOTO,
+            compressed
+          );
+
+        }
+
+
+        renderProfilePhotos();
+        renderCalendar();
+
+      };
+
+
+      image.src =
+        event.target.result;
+
+    };
+
+
+  reader.readAsDataURL(file);
+
+}
+
+
+document.getElementById(
+  "changeLeoPhoto"
+).addEventListener(
+  "click",
+  () => {
+
+    document.getElementById(
+      "leoPhotoInput"
+    ).click();
+
+  }
+);
+
+
+document.getElementById(
+  "changeRitaPhoto"
+).addEventListener(
+  "click",
+  () => {
+
+    document.getElementById(
+      "ritaPhotoInput"
+    ).click();
+
+  }
+);
+
+
+document.getElementById(
+  "leoPhotoInput"
+).addEventListener(
+  "change",
+  event => {
+
+    handlePhoto(
+      "leo",
+      event.target.files[0]
+    );
+
+  }
+);
+
+
+document.getElementById(
+  "ritaPhotoInput"
+).addEventListener(
+  "change",
+  event => {
+
+    handlePhoto(
+      "rita",
+      event.target.files[0]
+    );
+
+  }
+);
+
+
+/*
+  START APP
+*/
+
+renderProfilePhotos();
+renderCalendar();
+renderAgenda();
+
+</script>
+
+</body>
+</html>
