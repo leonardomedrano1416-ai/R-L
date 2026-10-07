@@ -510,6 +510,59 @@
       display: block;
     }
 
+
+    .event {
+      cursor: pointer;
+    }
+
+    .event:active {
+      transform: scale(.995);
+    }
+
+    .event-action {
+      color: var(--muted);
+      font-size: 18px;
+      font-weight: 800;
+      padding-left: 6px;
+    }
+
+    .edit-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .edit-actions .primary-btn {
+      margin-top: 0;
+    }
+
+    .edit-actions .secondary-btn {
+      min-height: 51px;
+    }
+
+    .series-actions {
+      display: none;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .series-actions.show {
+      display: block;
+    }
+
+    .series-actions .secondary-btn {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .delete-event-btn {
+      width: 100%;
+      margin-top: 12px;
+      min-height: 48px;
+    }
+
     .auth-gate {
       position: fixed;
       inset: 0;
@@ -776,6 +829,87 @@
   </section>
 
 
+
+  <!-- EDIT EVENT -->
+  <section id="editScreen" class="screen">
+
+    <button class="back-btn" id="cancelEdit">← Cancel</button>
+
+    <div class="form-card">
+
+      <h2>Edit Event</h2>
+      <div class="small-muted" id="editOccurrenceLabel"></div>
+
+      <label for="editEventTitle">What's happening?</label>
+      <input id="editEventTitle" type="text" placeholder="Work, clinical, appointment..." />
+
+      <label for="editEventOwner">Who?</label>
+      <select id="editEventOwner">
+        <option value="leo">Leo</option>
+        <option value="rita">Rita</option>
+        <option value="both">Both of us</option>
+      </select>
+
+      <label for="editEventDate">Date</label>
+      <input id="editEventDate" type="date" />
+
+      <div class="two-columns">
+        <div>
+          <label for="editStartTime">Starts</label>
+          <input id="editStartTime" type="time" />
+        </div>
+        <div>
+          <label for="editEndTime">Ends</label>
+          <input id="editEndTime" type="time" />
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-copy">
+          <strong>Recurring event</strong>
+          <span>Repeat this automatically.</span>
+        </div>
+        <button type="button" class="toggle" id="editRecurringToggle" aria-label="Recurring event"></button>
+      </div>
+
+      <div id="editRepeatOptions" class="repeat-options">
+        <label for="editRepeatType">Repeat</label>
+        <select id="editRepeatType">
+          <option value="weekly">Every week</option>
+          <option value="biweekly">Every 2 weeks</option>
+          <option value="monthly">Every month</option>
+        </select>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-copy">
+          <strong>Remind us 1 day before</strong>
+          <span id="editReminderDescription">Automatically on for one-time events.</span>
+        </div>
+        <button type="button" class="toggle on" id="editReminderToggle" aria-label="Reminder"></button>
+      </div>
+
+      <label for="editEventNotes">Notes</label>
+      <textarea id="editEventNotes" placeholder="Anything else we should know?"></textarea>
+
+      <div class="edit-actions">
+        <button class="secondary-btn" id="deleteEvent">Delete</button>
+        <button class="primary-btn" id="saveEventChanges">Save changes</button>
+      </div>
+
+      <div class="series-actions" id="seriesActions">
+        <div class="small-muted">Recurring event options for the selected occurrence:</div>
+        <button class="secondary-btn" id="saveThisOccurrence">Save this occurrence only</button>
+        <button class="secondary-btn" id="saveThisAndFuture">Save this &amp; future</button>
+        <button class="secondary-btn" id="skipOccurrence">Skip this occurrence</button>
+        <button class="secondary-btn danger-btn delete-event-btn" id="deleteThisAndFuture">Delete this &amp; future</button>
+      </div>
+
+    </div>
+
+  </section>
+
+
   <!-- SETTINGS -->
   <section id="settingsScreen" class="screen">
 
@@ -892,7 +1026,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, collection, doc, setDoc, addDoc, onSnapshot, getDoc,
+  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, getDoc,
   serverTimestamp, query, orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -928,6 +1062,10 @@ let selectedDate = dateKey(realToday);
 let recurring = false;
 let reminder = true;
 let currentScreen = "calendar";
+let editingEventId = null;
+let editingOccurrenceDate = null;
+let editRecurring = false;
+let editReminder = true;
 
 function pad(number) { return String(number).padStart(2, "0"); }
 function dateKey(date) { return date.getFullYear()+"-"+pad(date.getMonth()+1)+"-"+pad(date.getDate()); }
@@ -941,6 +1079,7 @@ function setSyncStatus(text) { document.getElementById("syncStatus").textContent
 function eventOccursOn(event,key) {
   const target=parseDate(key), start=parseDate(event.date);
   if(target<start) return false;
+  if(event.seriesEndBefore && key>=event.seriesEndBefore) return false;
   if(Array.isArray(event.exceptions) && event.exceptions.includes(key)) return false;
   if(!event.recurring) return event.date===key;
   const difference=Math.round((target-start)/86400000);
@@ -985,9 +1124,17 @@ function eventCard(event) {
   let ownerName=event.owner==="rita"?"Rita":event.owner==="both"?"Together":"Leo";
   let timeText=""; if(event.start){timeText=formatTime(event.start);if(event.end)timeText+=" – "+formatTime(event.end);}
   let repeatText=""; if(event.recurring){if(event.repeat==="weekly")repeatText=" • Weekly";if(event.repeat==="biweekly")repeatText=" • Every 2 weeks";if(event.repeat==="monthly")repeatText=" • Monthly";}
-  return `<div class="event"><div class="event-line ${event.owner}"></div><div class="event-info"><div class="event-title">${escapeHTML(event.title)}</div><div class="event-meta">${ownerName}${repeatText}</div>${timeText?`<div class="event-meta">${timeText}</div>`:""}</div></div>`;
+  return `<div class="event" data-event-id="${event.id}" role="button" tabindex="0"><div class="event-line ${event.owner}"></div><div class="event-info"><div class="event-title">${escapeHTML(event.title)}</div><div class="event-meta">${ownerName}${repeatText}</div>${timeText?`<div class="event-meta">${timeText}</div>`:""}</div><div class="event-action">›</div></div>`;
 }
-function renderEventList(container,key) { const dayEvents=eventsForDate(key); container.innerHTML=dayEvents.length?dayEvents.map(eventCard).join(""):`<div class="empty">Nothing scheduled.</div>`; }
+function renderEventList(container,key) {
+  const dayEvents=eventsForDate(key);
+  container.innerHTML=dayEvents.length?dayEvents.map(eventCard).join(""):`<div class="empty">Nothing scheduled.</div>`;
+  container.querySelectorAll(".event[data-event-id]").forEach(card=>{
+    const open=()=>openEditEvent(card.dataset.eventId,key);
+    card.addEventListener("click",open);
+    card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();open();}});
+  });
+}
 function renderSelectedDate() { document.getElementById("selectedDateTitle").textContent=formatDate(selectedDate); renderEventList(document.getElementById("selectedEvents"),selectedDate); }
 function renderAgenda() {
   const todayKey=dateKey(realToday), tomorrow=new Date(realToday); tomorrow.setDate(tomorrow.getDate()+1); const tomorrowKey=dateKey(tomorrow);
@@ -1014,6 +1161,151 @@ function resetEventForm() {
   document.getElementById("reminderDescription").textContent="Automatically on for one-time events.";
 }
 
+
+function getEventById(id) { return events.find(e=>e.id===id); }
+
+function setEditToggleUI() {
+  document.getElementById("editRecurringToggle").classList.toggle("on",editRecurring);
+  document.getElementById("editRepeatOptions").classList.toggle("show",editRecurring);
+  document.getElementById("editReminderToggle").classList.toggle("on",editReminder);
+  document.getElementById("editReminderDescription").textContent=editRecurring?"Off by default for recurring events.":"Automatically on for one-time events.";
+}
+
+function openEditEvent(eventId, occurrenceDate) {
+  const event=getEventById(eventId);
+  if(!event)return;
+  editingEventId=eventId;
+  editingOccurrenceDate=occurrenceDate||event.date;
+  editRecurring=!!event.recurring;
+  editReminder=!!event.reminder;
+
+  document.getElementById("editEventTitle").value=event.title||"";
+  document.getElementById("editEventOwner").value=event.owner||"leo";
+  document.getElementById("editEventDate").value=editingOccurrenceDate;
+  document.getElementById("editStartTime").value=event.start||"";
+  document.getElementById("editEndTime").value=event.end||"";
+  document.getElementById("editRepeatType").value=event.repeat||"weekly";
+  document.getElementById("editEventNotes").value=event.notes||"";
+  document.getElementById("editOccurrenceLabel").textContent=event.recurring
+    ? `Selected occurrence: ${formatDate(editingOccurrenceDate)}`
+    : formatDate(event.date);
+  document.getElementById("seriesActions").classList.toggle("show",!!event.recurring);
+  setEditToggleUI();
+
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById("editScreen").classList.add("active");
+}
+
+function closeEdit() {
+  editingEventId=null;
+  editingOccurrenceDate=null;
+  showScreen(currentScreen==="settings"?"calendar":currentScreen);
+}
+
+function readEditForm() {
+  const title=document.getElementById("editEventTitle").value.trim();
+  const date=document.getElementById("editEventDate").value;
+  const start=document.getElementById("editStartTime").value;
+  const end=document.getElementById("editEndTime").value;
+  if(!title){alert("Give the event a name first.");return null;}
+  if(!date){alert("Choose a date.");return null;}
+  if(start&&end&&end<=start){alert("The end time needs to be after the start time.");return null;}
+  return {
+    title,
+    owner:document.getElementById("editEventOwner").value,
+    date,
+    start,
+    end,
+    notes:document.getElementById("editEventNotes").value.trim(),
+    recurring:editRecurring,
+    repeat:editRecurring?document.getElementById("editRepeatType").value:null,
+    reminder:editReminder
+  };
+}
+
+async function updateWholeEvent() {
+  const data=readEditForm(); if(!data||!editingEventId)return;
+  try {
+    await updateDoc(doc(db,"events",editingEventId),{...data,updatedAt:serverTimestamp()});
+    selectedDate=data.date;
+    displayedMonth=new Date(parseDate(data.date).getFullYear(),parseDate(data.date).getMonth(),1);
+    closeEdit();
+  } catch(error){console.error(error);alert("R&L couldn't update that event.");}
+}
+
+async function deleteWholeEvent() {
+  if(!editingEventId)return;
+  if(!confirm("Delete this event? This will remove it for both Leo and Rita."))return;
+  try { await deleteDoc(doc(db,"events",editingEventId)); closeEdit(); }
+  catch(error){console.error(error);alert("R&L couldn't delete that event.");}
+}
+
+async function saveOccurrenceOnly() {
+  const original=getEventById(editingEventId), data=readEditForm();
+  if(!original||!data)return;
+  if(!confirm("Save changes only for this occurrence?"))return;
+  try {
+    const exceptions=Array.from(new Set([...(original.exceptions||[]),editingOccurrenceDate]));
+    await updateDoc(doc(db,"events",editingEventId),{exceptions,updatedAt:serverTimestamp()});
+    await addDoc(collection(db,"events"),{
+      ...data, recurring:false, repeat:null, exceptions:[],
+      createdBy:currentUser.uid, createdAt:serverTimestamp(),
+      detachedFrom:editingEventId, originalOccurrenceDate:editingOccurrenceDate
+    });
+    selectedDate=data.date;
+    closeEdit();
+  } catch(error){console.error(error);alert("R&L couldn't save this occurrence.");}
+}
+
+async function skipOccurrence() {
+  const original=getEventById(editingEventId);
+  if(!original||!original.recurring)return;
+  if(!confirm(`Skip ${formatDate(editingOccurrenceDate)}? The rest of the series will stay.`))return;
+  try {
+    const exceptions=Array.from(new Set([...(original.exceptions||[]),editingOccurrenceDate]));
+    await updateDoc(doc(db,"events",editingEventId),{exceptions,updatedAt:serverTimestamp()});
+    closeEdit();
+  } catch(error){console.error(error);alert("R&L couldn't skip that occurrence.");}
+}
+
+async function saveThisAndFuture() {
+  const original=getEventById(editingEventId), data=readEditForm();
+  if(!original||!data)return;
+  if(!confirm("Apply these changes from this occurrence forward? Earlier occurrences will stay as they were."))return;
+  try {
+    const cutoff=editingOccurrenceDate;
+    const oldExceptions=Array.from(new Set([...(original.exceptions||[]),cutoff]));
+    await updateDoc(doc(db,"events",editingEventId),{
+      seriesEndBefore:cutoff,
+      exceptions:oldExceptions,
+      updatedAt:serverTimestamp()
+    });
+    await addDoc(collection(db,"events"),{
+      ...data,
+      date:data.date||cutoff,
+      exceptions:[],
+      createdBy:currentUser.uid,
+      createdAt:serverTimestamp(),
+      continuedFrom:editingEventId
+    });
+    selectedDate=data.date;
+    closeEdit();
+  } catch(error){console.error(error);alert("R&L couldn't update the future series.");}
+}
+
+async function deleteThisAndFuture() {
+  const original=getEventById(editingEventId);
+  if(!original||!original.recurring)return;
+  if(!confirm(`Delete ${formatDate(editingOccurrenceDate)} and every occurrence after it?`))return;
+  try {
+    await updateDoc(doc(db,"events",editingEventId),{
+      seriesEndBefore:editingOccurrenceDate,
+      updatedAt:serverTimestamp()
+    });
+    closeEdit();
+  } catch(error){console.error(error);alert("R&L couldn't delete the future occurrences.");}
+}
+
 document.getElementById("previousMonth").addEventListener("click",()=>{displayedMonth=new Date(displayedMonth.getFullYear(),displayedMonth.getMonth()-1,1);renderCalendar();});
 document.getElementById("nextMonth").addEventListener("click",()=>{displayedMonth=new Date(displayedMonth.getFullYear(),displayedMonth.getMonth()+1,1);renderCalendar();});
 document.querySelectorAll(".nav-btn").forEach(b=>b.addEventListener("click",()=>showScreen(b.dataset.screen)));
@@ -1023,6 +1315,20 @@ document.getElementById("recurringToggle").addEventListener("click",function(){
   recurring=!recurring;this.classList.toggle("on",recurring);document.getElementById("repeatOptions").classList.toggle("show",recurring);reminder=!recurring;document.getElementById("reminderToggle").classList.toggle("on",reminder);document.getElementById("reminderDescription").textContent=recurring?"Off automatically for recurring events.":"Automatically on for one-time events.";
 });
 document.getElementById("reminderToggle").addEventListener("click",function(){reminder=!reminder;this.classList.toggle("on",reminder);});
+
+document.getElementById("cancelEdit").addEventListener("click",closeEdit);
+document.getElementById("editRecurringToggle").addEventListener("click",function(){
+  editRecurring=!editRecurring;
+  if(editRecurring && !getEventById(editingEventId)?.recurring) editReminder=false;
+  setEditToggleUI();
+});
+document.getElementById("editReminderToggle").addEventListener("click",function(){editReminder=!editReminder;setEditToggleUI();});
+document.getElementById("saveEventChanges").addEventListener("click",updateWholeEvent);
+document.getElementById("deleteEvent").addEventListener("click",deleteWholeEvent);
+document.getElementById("saveThisOccurrence").addEventListener("click",saveOccurrenceOnly);
+document.getElementById("saveThisAndFuture").addEventListener("click",saveThisAndFuture);
+document.getElementById("skipOccurrence").addEventListener("click",skipOccurrence);
+document.getElementById("deleteThisAndFuture").addEventListener("click",deleteThisAndFuture);
 
 document.getElementById("saveEvent").addEventListener("click",async()=>{
   if(!currentUser)return;
