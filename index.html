@@ -258,6 +258,33 @@
 
 
 
+
+    .notification-card {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(255,255,255,.72);
+    }
+
+    .notification-card strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .notification-card p {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .notification-status {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
     /* Reminders are automatic under the R&L reminder policy. */
     #reminderToggle,
     #editReminderToggle {
@@ -1282,6 +1309,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -1832,6 +1860,104 @@ document.getElementById("loginButton").addEventListener("click",async()=>{
 document.getElementById("loginPassword").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("loginButton").click();});
 document.getElementById("signOutButton").addEventListener("click",()=>signOut(auth));
 
+
+async function updateNotificationStatus() {
+  const status=document.getElementById("notificationStatus");
+  const button=document.getElementById("enableNotificationsBtn");
+  if(!status || !button) return;
+
+  if(!("Notification" in window) || !("serviceWorker" in navigator)) {
+    status.textContent="Notifications are not supported in this browser.";
+    button.disabled=true;
+    return;
+  }
+
+  if(Notification.permission==="granted") {
+    status.textContent="Notifications are enabled on this device. ✓";
+    button.textContent="Notifications Enabled";
+  } else if(Notification.permission==="denied") {
+    status.textContent="Notifications are blocked in this browser's settings.";
+    button.textContent="Notifications Blocked";
+  } else {
+    status.textContent="Not enabled on this device.";
+    button.textContent="Enable Notifications";
+  }
+}
+
+async function enablePushNotifications() {
+  const status=document.getElementById("notificationStatus");
+  const button=document.getElementById("enableNotificationsBtn");
+  if(!currentUser) {
+    if(status) status.textContent="Sign in first, then enable notifications.";
+    return;
+  }
+
+  try {
+    if(!await isSupported()) {
+      if(status) status.textContent="Firebase notifications are not supported in this browser.";
+      return;
+    }
+
+    const permission=await Notification.requestPermission();
+    if(permission!=="granted") {
+      await updateNotificationStatus();
+      return;
+    }
+
+    if(button) {
+      button.disabled=true;
+      button.textContent="Connecting…";
+    }
+    if(status) status.textContent="Registering this device…";
+
+    const registration=await navigator.serviceWorker.register("./firebase-messaging-sw.js");
+    await navigator.serviceWorker.ready;
+
+    messaging=getMessaging(app);
+    const token=await getToken(messaging,{
+      vapidKey:VAPID_KEY,
+      serviceWorkerRegistration:registration
+    });
+
+    if(!token) throw new Error("Firebase did not return a notification token.");
+
+    // Store per-device tokens as a map so Leo/Rita can enable more than one device later.
+    const safeTokenKey=token.replace(/[^A-Za-z0-9_-]/g,"_");
+    const profileRef=doc(db,"profiles",currentUser.uid);
+    await setDoc(profileRef,{
+      notificationTokens:{
+        [safeTokenKey]:{
+          token,
+          updatedAt:new Date().toISOString(),
+          userAgent:navigator.userAgent
+        }
+      }
+    },{merge:true});
+
+    if(status) status.textContent="Notifications are enabled on this device. ✓";
+    if(button) {
+      button.textContent="Notifications Enabled";
+      button.disabled=false;
+    }
+
+    onMessage(messaging,(payload)=>{
+      const title=payload?.notification?.title || "R&L";
+      const body=payload?.notification?.body || "You have a new reminder.";
+      if(Notification.permission==="granted") {
+        new Notification(title,{body,icon:"./icon-192.png"});
+      }
+    });
+  } catch(error) {
+    console.error("Notification setup failed:",error);
+    if(status) status.textContent="Could not enable notifications. Try again after refreshing.";
+    if(button) {
+      button.disabled=false;
+      button.textContent="Enable Notifications";
+    }
+  }
+}
+
+
 onAuthStateChanged(auth,async user=>{
   currentUser=user;
   if(!user){
@@ -1843,6 +1969,11 @@ onAuthStateChanged(auth,async user=>{
 });
 
 renderProfilePhotos(); renderCalendar(); renderAgenda();
+
+const enableNotificationsBtn=document.getElementById("enableNotificationsBtn");
+if(enableNotificationsBtn) enableNotificationsBtn.addEventListener("click",enablePushNotifications);
+updateNotificationStatus();
+
 </script>
 
 </body>
