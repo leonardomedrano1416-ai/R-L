@@ -225,6 +225,36 @@
 
 
 
+
+    .category-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      background: var(--accent-soft);
+      color: var(--text);
+    }
+
+    .category-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      background: var(--accent);
+    }
+
+    .category-work .category-dot { background: #6e8ca6; }
+    .category-school .category-dot { background: #8b79a8; }
+    .category-appointment .category-dot { background: #bd7f8f; }
+    .category-personal .category-dot { background: #a86d56; }
+    .category-baby .category-dot { background: #d89a9e; }
+    .category-bills .category-dot { background: #8d8b65; }
+    .category-other .category-dot { background: #8c8178; }
+
     .important-icon {
       color: #d92d20;
       font-weight: 900;
@@ -794,6 +824,17 @@
         <option value="both">Both of us</option>
       </select>
 
+      <label for="eventCategory">Category</label>
+      <select id="eventCategory">
+        <option value="work">Work</option>
+        <option value="school">School / Clinical</option>
+        <option value="appointment">Appointment</option>
+        <option value="personal" selected>Personal</option>
+        <option value="baby">Baby</option>
+        <option value="bills">Bills</option>
+        <option value="other">Other</option>
+      </select>
+
       <label for="eventDate">Date</label>
       <input id="eventDate" type="date" />
 
@@ -920,6 +961,17 @@
         <option value="leo">Leo</option>
         <option value="rita">Rita</option>
         <option value="both">Both of us</option>
+      </select>
+
+      <label for="editEventCategory">Category</label>
+      <select id="editEventCategory">
+        <option value="work">Work</option>
+        <option value="school">School / Clinical</option>
+        <option value="appointment">Appointment</option>
+        <option value="personal">Personal</option>
+        <option value="baby">Baby</option>
+        <option value="bills">Bills</option>
+        <option value="other">Other</option>
       </select>
 
       <label for="editEventDate">Date</label>
@@ -1205,6 +1257,20 @@ function getOwnersForDate(key) {
   eventsForDate(key).forEach(e=>{ if(e.owner==="leo"||e.owner==="both")leo=true; if(e.owner==="rita"||e.owner==="both")rita=true; });
   return {leo,rita};
 }
+
+function categoryLabel(category) {
+  const labels={
+    work:"Work",
+    school:"School / Clinical",
+    appointment:"Appointment",
+    personal:"Personal",
+    baby:"Baby",
+    bills:"Bills",
+    other:"Other"
+  };
+  return labels[category]||"Personal";
+}
+
 function profileMarker(person) {
   const photo=profilePhotos[person], letter=person==="leo"?"L":"R";
   return photo ? `<img class="marker ${person}" src="${photo}" alt="${person}">` : `<span class="marker ${person}">${letter}</span>`;
@@ -1266,7 +1332,7 @@ function eventCard(event) {
     if(event.repeat==="biweekly")repeatText=` • Every 2 weeks${days.length?` (${days.map(d=>dayNames[d]).join(", ")})`:""}`;
     if(event.repeat==="monthly")repeatText=" • Monthly";
   }
-  return `<div class="event" data-event-id="${event.id}" role="button" tabindex="0"><div class="event-line ${event.owner}"></div><div class="event-info"><div class="event-title">${event.important===true?`<span class="important-icon">❗</span>`:""}${escapeHTML(event.title)}</div><div class="event-meta">${ownerName}${repeatText}</div>${timeText?`<div class="event-meta">${timeText}</div>`:""}</div><div class="event-action">›</div></div>`;
+  return `<div class="event" data-event-id="${event.id}" role="button" tabindex="0"><div class="event-line ${event.owner}"></div><div class="event-info"><div class="event-title">${event.important===true?`<span class="important-icon">❗</span>`:""}${escapeHTML(event.title)}</div><div class="event-meta">${ownerName}${repeatText}</div>${timeText?`<div class="event-meta">${timeText}</div>`:""}<div class="category-chip category-${escapeHTML(event.category||"personal")}"><span class="category-dot"></span>${escapeHTML(categoryLabel(event.category||"personal"))}</div></div><div class="event-action">›</div></div>`;
 }
 function renderEventList(container,key) {
   const dayEvents=eventsForDate(key);
@@ -1301,7 +1367,7 @@ function openAddEvent() {
 }
 function resetEventForm() {
   ["eventTitle","startTime","endTime","eventNotes"].forEach(id=>document.getElementById(id).value="");
-  document.getElementById("eventOwner").value=currentPerson||"leo"; document.getElementById("repeatType").value="weekly"; recurring=false; reminder=true; important=false; selectedWeekdays=[]; setWeekdayButtons("weekdayPicker",selectedWeekdays); updateWeekdayPickerVisibility();
+  document.getElementById("eventOwner").value=currentPerson||"leo"; document.getElementById("eventCategory").value="personal"; document.getElementById("repeatType").value="weekly"; recurring=false; reminder=true; important=false; selectedWeekdays=[]; setWeekdayButtons("weekdayPicker",selectedWeekdays); updateWeekdayPickerVisibility();
   document.getElementById("recurringToggle").classList.remove("on"); document.getElementById("repeatOptions").classList.remove("show"); document.getElementById("reminderToggle").classList.add("on"); document.getElementById("importantToggle").classList.remove("on");
   document.getElementById("reminderDescription").textContent="Automatically on for one-time events.";
 }
@@ -1330,6 +1396,7 @@ function openEditEvent(eventId, occurrenceDate) {
 
   document.getElementById("editEventTitle").value=event.title||"";
   document.getElementById("editEventOwner").value=event.owner||"leo";
+  document.getElementById("editEventCategory").value=event.category||"personal";
   document.getElementById("editEventDate").value=editingOccurrenceDate;
   document.getElementById("editStartTime").value=event.start||"";
   document.getElementById("editEndTime").value=event.end||"";
@@ -1369,6 +1436,7 @@ function readEditForm() {
   return {
     title,
     owner:document.getElementById("editEventOwner").value,
+    category:document.getElementById("editEventCategory").value,
     date,
     start,
     end,
@@ -1523,7 +1591,7 @@ document.getElementById("saveEvent").addEventListener("click",async()=>{
   if(recurring && (repeatType==="weekly"||repeatType==="biweekly") && !selectedWeekdays.length){alert("Choose at least one day for this recurring event.");return;}
   const button=document.getElementById("saveEvent"); button.disabled=true; button.textContent="Saving…";
   try {
-    await addDoc(collection(db,"events"),{title,owner:document.getElementById("eventOwner").value,date,start,end,notes:document.getElementById("eventNotes").value.trim(),recurring,repeat:recurring?repeatType:null,weekdays:recurring&&(repeatType==="weekly"||repeatType==="biweekly")?[...selectedWeekdays]:[],reminder,important,exceptions:[],createdBy:currentUser.uid,createdAt:serverTimestamp()});
+    await addDoc(collection(db,"events"),{title,owner:document.getElementById("eventOwner").value,category:document.getElementById("eventCategory").value,date,start,end,notes:document.getElementById("eventNotes").value.trim(),recurring,repeat:recurring?repeatType:null,weekdays:recurring&&(repeatType==="weekly"||repeatType==="biweekly")?[...selectedWeekdays]:[],reminder,important,exceptions:[],createdBy:currentUser.uid,createdAt:serverTimestamp()});
     selectedDate=date; const selected=parseDate(date); displayedMonth=new Date(selected.getFullYear(),selected.getMonth(),1); resetEventForm(); showScreen("calendar");
   } catch(error){console.error(error);alert("R&L couldn't save that event. Check your Firestore rules and internet connection.");}
   finally {button.disabled=false;button.textContent="Add to R&L";}
