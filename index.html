@@ -257,6 +257,14 @@
 
 
 
+
+    /* Reminders are automatic under the R&L reminder policy. */
+    #reminderToggle,
+    #editReminderToggle {
+      pointer-events: none;
+      opacity: .55;
+    }
+
     .category-legend {
       margin: 14px 0 18px;
       padding: 12px 14px;
@@ -1364,6 +1372,22 @@ function getOwnersForDate(key) {
 }
 
 
+
+function reminderScheduleForEvent(event) {
+  // Recurring events do not get the automatic 1-hour reminder.
+  // Important events always get both 1-day and 1-hour reminders.
+  if (event.important === true) return ["day", "hour"];
+  if (!event.recurring) return ["hour"];
+  return [];
+}
+
+function reminderLabelForEvent(event) {
+  const schedule=reminderScheduleForEvent(event);
+  if(schedule.length===2) return "Reminders: 1 day + 1 hour before";
+  if(schedule.length===1 && schedule[0]==="hour") return "Reminder: 1 hour before";
+  return "";
+}
+
 function categoryDotsForDate(key) {
   const categories=[];
   eventsForDate(key).forEach(event=>{
@@ -1449,7 +1473,7 @@ function eventCard(event) {
     if(event.repeat==="biweekly")repeatText=` • Every 2 weeks${days.length?` (${days.map(d=>dayNames[d]).join(", ")})`:""}`;
     if(event.repeat==="monthly")repeatText=" • Monthly";
   }
-  return `<div class="event" data-event-id="${event.id}" role="button" tabindex="0"><div class="event-line ${event.owner}"></div><div class="event-info"><div class="event-title">${event.important===true?`<span class="important-icon">❗</span>`:""}${escapeHTML(event.title)}</div><div class="event-meta">${ownerName}${repeatText}</div>${timeText?`<div class="event-meta">${timeText}</div>`:""}<div class="category-chip category-${escapeHTML(event.category||"personal")}"><span class="category-dot"></span>${escapeHTML(categoryLabel(event.category||"personal"))}</div></div><div class="event-action">›</div></div>`;
+  return `<div class="event" data-event-id="${event.id}" role="button" tabindex="0"><div class="event-line ${event.owner}"></div><div class="event-info"><div class="event-title">${event.important===true?`<span class="important-icon">❗</span>`:""}${escapeHTML(event.title)}</div><div class="event-meta">${ownerName}${repeatText}</div>${timeText?`<div class="event-meta">${timeText}</div>`:""}${reminderLabelForEvent(event)?`<div class="event-meta">${reminderLabelForEvent(event)}</div>`:""}<div class="category-chip category-${escapeHTML(event.category||"personal")}"><span class="category-dot"></span>${escapeHTML(categoryLabel(event.category||"personal"))}</div></div><div class="event-action">›</div></div>`;
 }
 function renderEventList(container,key) {
   const dayEvents=eventsForDate(key);
@@ -1561,7 +1585,7 @@ function readEditForm() {
     recurring:editRecurring,
     repeat:editRecurring?repeatType:null,
     weekdays:editRecurring && (repeatType==="weekly"||repeatType==="biweekly") ? [...editSelectedWeekdays] : [],
-    reminder:editReminder,
+    reminder:(editImportant||!editRecurring),
     important:editImportant
   };
 }
@@ -1708,7 +1732,7 @@ document.getElementById("saveEvent").addEventListener("click",async()=>{
   if(recurring && (repeatType==="weekly"||repeatType==="biweekly") && !selectedWeekdays.length){alert("Choose at least one day for this recurring event.");return;}
   const button=document.getElementById("saveEvent"); button.disabled=true; button.textContent="Saving…";
   try {
-    await addDoc(collection(db,"events"),{title,owner:document.getElementById("eventOwner").value,category:document.getElementById("eventCategory").value,date,start,end,notes:document.getElementById("eventNotes").value.trim(),recurring,repeat:recurring?repeatType:null,weekdays:recurring&&(repeatType==="weekly"||repeatType==="biweekly")?[...selectedWeekdays]:[],reminder,important,exceptions:[],createdBy:currentUser.uid,createdAt:serverTimestamp()});
+    await addDoc(collection(db,"events"),{title,owner:document.getElementById("eventOwner").value,category:document.getElementById("eventCategory").value,date,start,end,notes:document.getElementById("eventNotes").value.trim(),recurring,repeat:recurring?repeatType:null,weekdays:recurring&&(repeatType==="weekly"||repeatType==="biweekly")?[...selectedWeekdays]:[],reminder:(important||!recurring),important,exceptions:[],createdBy:currentUser.uid,createdAt:serverTimestamp()});
     selectedDate=date; const selected=parseDate(date); displayedMonth=new Date(selected.getFullYear(),selected.getMonth(),1); resetEventForm(); showScreen("calendar");
   } catch(error){console.error(error);alert("R&L couldn't save that event. Check your Firestore rules and internet connection.");}
   finally {button.disabled=false;button.textContent="Add to R&L";}
