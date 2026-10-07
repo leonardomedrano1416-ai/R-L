@@ -162,7 +162,7 @@
 
     .markers {
       position: absolute;
-      bottom: 5px;
+      bottom: 13px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
@@ -254,6 +254,51 @@
     .category-baby .category-dot { background: #d89a9e; }
     .category-bills .category-dot { background: #8d8b65; }
     .category-other .category-dot { background: #8c8178; }
+
+
+    /* Category color system */
+    .event-card.category-work { border-left-color: #4f86b5 !important; }
+    .event-card.category-school { border-left-color: #7653a6 !important; }
+    .event-card.category-appointment { border-left-color: #c45f86 !important; }
+    .event-card.category-personal { border-left-color: #a86d56 !important; }
+    .event-card.category-baby { border-left-color: #e59aa7 !important; }
+    .event-card.category-bills { border-left-color: #6f8d63 !important; }
+    .event-card.category-other { border-left-color: #8c8178 !important; }
+
+    .category-chip.category-work { background: #eaf3fa; color: #315f85; }
+    .category-chip.category-school { background: #f0eafa; color: #60418d; }
+    .category-chip.category-appointment { background: #faeaf0; color: #9f4669; }
+    .category-chip.category-personal { background: #f5ebe6; color: #86513d; }
+    .category-chip.category-baby { background: #fcecef; color: #ad6672; }
+    .category-chip.category-bills { background: #edf3e9; color: #55704b; }
+    .category-chip.category-other { background: #f0eeec; color: #6e655f; }
+
+    .calendar-category-dots {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 4px;
+      display: flex;
+      gap: 3px;
+      align-items: center;
+      justify-content: center;
+      max-width: 38px;
+    }
+
+    .calendar-category-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .calendar-category-dot.work { background: #4f86b5; }
+    .calendar-category-dot.school { background: #7653a6; }
+    .calendar-category-dot.appointment { background: #c45f86; }
+    .calendar-category-dot.personal { background: #a86d56; }
+    .calendar-category-dot.baby { background: #e59aa7; }
+    .calendar-category-dot.bills { background: #6f8d63; }
+    .calendar-category-dot.other { background: #8c8178; }
 
     .important-icon {
       color: #d92d20;
@@ -1258,6 +1303,18 @@ function getOwnersForDate(key) {
   return {leo,rita};
 }
 
+
+function categoryDotsForDate(key) {
+  const categories=[];
+  eventsForDate(key).forEach(event=>{
+    const category=event.category||"personal";
+    if(!categories.includes(category)) categories.push(category);
+  });
+  const shown=categories.slice(0,5);
+  if(!shown.length) return "";
+  return `<div class="calendar-category-dots">${shown.map(category=>`<span class="calendar-category-dot ${escapeHTML(category)}" title="${escapeHTML(categoryLabel(category))}"></span>`).join("")}</div>`;
+}
+
 function categoryLabel(category) {
   const labels={
     work:"Work",
@@ -1314,7 +1371,7 @@ function renderCalendar() {
     const owners=getOwnersForDate(key); let markers="";
     if(owners.leo) markers+=profileMarker("leo"); if(owners.rita) markers+=profileMarker("rita");
     const hasImportant=eventsForDate(key).some(e=>e.important===true);
-    button.innerHTML=`<span>${day}</span>${hasImportant?`<span class="important-day-alert" aria-label="Important">!</span>`:""}${markers?`<div class="markers">${markers}</div>`:""}`;
+    button.innerHTML=`<span>${day}</span>${hasImportant?`<span class="important-day-alert" aria-label="Important">!</span>`:""}${markers?`<div class="markers">${markers}</div>`:""}${categoryDotsForDate(key)}`;
     button.addEventListener("click",()=>{selectedDate=key;renderCalendar();renderSelectedDate();});
     grid.appendChild(button);
   }
