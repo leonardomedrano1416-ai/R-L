@@ -256,6 +256,52 @@
     .category-other .category-dot { background: #8c8178; }
 
 
+
+    .category-legend {
+      margin: 14px 0 18px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,.72);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .category-legend-title {
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 9px;
+      color: var(--muted);
+    }
+
+    .category-legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px 12px;
+    }
+
+    .category-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .legend-dot.work { background: #4f86b5; }
+    .legend-dot.school { background: #7653a6; }
+    .legend-dot.appointment { background: #c45f86; }
+    .legend-dot.personal { background: #a86d56; }
+    .legend-dot.baby { background: #e59aa7; }
+    .legend-dot.bills { background: #6f8d63; }
+    .legend-dot.other { background: #8c8178; }
+
     /* Category color system */
     .event-card.category-work { border-left-color: #4f86b5 !important; }
     .event-card.category-school { border-left-color: #7653a6 !important; }
@@ -808,7 +854,21 @@
 
       <div class="section-heading">
         <div>
-          <div class="small-muted">Selected day</div>
+          
+      <div class="category-legend">
+        <div class="category-legend-title">Color guide</div>
+        <div class="category-legend-items">
+          <span class="category-legend-item"><span class="legend-dot work"></span>Work</span>
+          <span class="category-legend-item"><span class="legend-dot school"></span>School / Clinical</span>
+          <span class="category-legend-item"><span class="legend-dot appointment"></span>Appointment</span>
+          <span class="category-legend-item"><span class="legend-dot personal"></span>Personal</span>
+          <span class="category-legend-item"><span class="legend-dot baby"></span>Baby</span>
+          <span class="category-legend-item"><span class="legend-dot bills"></span>Bills</span>
+          <span class="category-legend-item"><span class="legend-dot other"></span>Other</span>
+        </div>
+      </div>
+
+<div class="small-muted">Selected day</div>
           <h3 id="selectedDateTitle"></h3>
         </div>
       </div>
