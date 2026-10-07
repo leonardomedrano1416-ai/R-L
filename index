@@ -510,6 +510,34 @@
       display: block;
     }
 
+    .auth-gate {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .auth-gate.hidden { display: none; }
+
+    .auth-card {
+      width: min(100%, 430px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .auth-card h1 { margin: 0 0 4px; font-size: 34px; }
+    .auth-card p { color: var(--muted); margin: 0 0 20px; }
+    .auth-error { color: var(--danger); font-size: 13px; min-height: 18px; margin-top: 10px; }
+    .identity-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .identity-btn { border: 1px solid var(--border); background: white; border-radius: 16px; min-height: 72px; font-weight: 800; }
+    .sync-status { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
     @media (max-width: 390px) {
       .app {
         padding-left: 11px;
@@ -529,7 +557,35 @@
 
 <body>
 
-<div class="app">
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <h1>R&amp;L</h1>
+    <p>Our life, in sync.</p>
+
+    <div id="loginPanel">
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email" autocomplete="email" placeholder="Email" />
+
+      <label for="loginPassword">Password</label>
+      <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" />
+
+      <button class="primary-btn" id="loginButton">Sign in</button>
+      <div class="auth-error" id="loginError"></div>
+    </div>
+
+    <div id="identityPanel" style="display:none;">
+      <strong>Who are you?</strong>
+      <div class="small-muted" style="margin-top:5px;">Choose once so R&amp;L knows whose account is signed in.</div>
+      <div class="identity-buttons">
+        <button class="identity-btn" data-person="leo">Leo</button>
+        <button class="identity-btn" data-person="rita">Rita</button>
+      </div>
+      <div class="auth-error" id="identityError"></div>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="mainApp" style="visibility:hidden;">
 
   <header class="topbar">
     <div>
@@ -795,6 +851,13 @@
 
     </div>
 
+    <div class="settings-card">
+      <h2>Account</h2>
+      <div class="small-muted" id="signedInAs">Signed in</div>
+      <div class="sync-status" id="syncStatus">Connecting to R&amp;L…</div>
+      <button class="secondary-btn danger-btn" id="signOutButton" style="width:100%; margin-top:16px;">Sign out</button>
+    </div>
+
   </section>
 
 </div>
@@ -823,1299 +886,225 @@
 </nav>
 
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, doc, setDoc, addDoc, onSnapshot, getDoc,
+  serverTimestamp, query, orderBy
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const STORAGE_EVENTS = "rl_events_v1";
+const firebaseConfig = {
+  apiKey: "AIzaSyCuDIAv7S36Ms-ZbQty4vb5MY5KsUn9G4g",
+  authDomain: "r-ll-3712e.firebaseapp.com",
+  projectId: "r-ll-3712e",
+  storageBucket: "r-ll-3712e.firebasestorage.app",
+  messagingSenderId: "953944176195",
+  appId: "1:953944176195:web:e450772e6151cac27706f6"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
 const STORAGE_LEO_PHOTO = "rl_leo_photo";
 const STORAGE_RITA_PHOTO = "rl_rita_photo";
-
-
-let events =
-  JSON.parse(localStorage.getItem(STORAGE_EVENTS) || "[]");
-
-
+let events = [];
 let profilePhotos = {
   leo: localStorage.getItem(STORAGE_LEO_PHOTO),
   rita: localStorage.getItem(STORAGE_RITA_PHOTO)
 };
-
+let currentUser = null;
+let currentPerson = null;
+let unsubscribeEvents = null;
+let unsubscribeProfiles = null;
 
 const realToday = new Date();
-
 realToday.setHours(0, 0, 0, 0);
-
-
-let displayedMonth =
-  new Date(
-    realToday.getFullYear(),
-    realToday.getMonth(),
-    1
-  );
-
-
+let displayedMonth = new Date(realToday.getFullYear(), realToday.getMonth(), 1);
 let selectedDate = dateKey(realToday);
-
-
 let recurring = false;
 let reminder = true;
 let currentScreen = "calendar";
 
+function pad(number) { return String(number).padStart(2, "0"); }
+function dateKey(date) { return date.getFullYear()+"-"+pad(date.getMonth()+1)+"-"+pad(date.getDate()); }
+function parseDate(key) { const p=key.split("-").map(Number); return new Date(p[0],p[1]-1,p[2]); }
+function formatDate(key) { return parseDate(key).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}); }
+function formatTime(time) { if(!time)return ""; const [h,m]=time.split(":").map(Number); return new Date(2000,0,1,h,m).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); }
+function escapeHTML(text) { return String(text||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
 
-function pad(number) {
-  return String(number).padStart(2, "0");
-}
+function setSyncStatus(text) { document.getElementById("syncStatus").textContent=text; }
 
-
-function dateKey(date) {
-
-  return (
-    date.getFullYear() +
-    "-" +
-    pad(date.getMonth() + 1) +
-    "-" +
-    pad(date.getDate())
-  );
-
-}
-
-
-function parseDate(key) {
-
-  const parts = key.split("-").map(Number);
-
-  return new Date(
-    parts[0],
-    parts[1] - 1,
-    parts[2]
-  );
-
-}
-
-
-function formatDate(key) {
-
-  return parseDate(key).toLocaleDateString(
-    "en-US",
-    {
-      weekday: "long",
-      month: "long",
-      day: "numeric"
-    }
-  );
-
-}
-
-
-function formatTime(time) {
-
-  if (!time) return "";
-
-  const [hours, minutes] =
-    time.split(":").map(Number);
-
-  const date =
-    new Date(2000, 0, 1, hours, minutes);
-
-  return date.toLocaleTimeString(
-    "en-US",
-    {
-      hour: "numeric",
-      minute: "2-digit"
-    }
-  );
-
-}
-
-
-function escapeHTML(text) {
-
-  return String(text || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-
-}
-
-
-function saveEvents() {
-
-  localStorage.setItem(
-    STORAGE_EVENTS,
-    JSON.stringify(events)
-  );
-
-}
-
-
-function eventOccursOn(event, key) {
-
-  const target = parseDate(key);
-  const start = parseDate(event.date);
-
-  if (target < start) return false;
-
-
-  if (!event.recurring) {
-    return event.date === key;
-  }
-
-
-  const difference =
-    Math.round(
-      (target - start) / 86400000
-    );
-
-
-  if (event.repeat === "weekly") {
-    return difference % 7 === 0;
-  }
-
-
-  if (event.repeat === "biweekly") {
-    return difference % 14 === 0;
-  }
-
-
-  if (event.repeat === "monthly") {
-
-    return (
-      target.getDate() ===
-      start.getDate()
-    );
-
-  }
-
-
+function eventOccursOn(event,key) {
+  const target=parseDate(key), start=parseDate(event.date);
+  if(target<start) return false;
+  if(Array.isArray(event.exceptions) && event.exceptions.includes(key)) return false;
+  if(!event.recurring) return event.date===key;
+  const difference=Math.round((target-start)/86400000);
+  if(event.repeat==="weekly") return difference%7===0;
+  if(event.repeat==="biweekly") return difference%14===0;
+  if(event.repeat==="monthly") return target.getDate()===start.getDate();
   return false;
-
 }
-
-
-function eventsForDate(key) {
-
-  return events
-    .filter(event =>
-      eventOccursOn(event, key)
-    )
-    .sort((a, b) =>
-      (a.start || "99:99")
-        .localeCompare(
-          b.start || "99:99"
-        )
-    );
-
-}
-
-
+function eventsForDate(key) { return events.filter(e=>eventOccursOn(e,key)).sort((a,b)=>(a.start||"99:99").localeCompare(b.start||"99:99")); }
 function getOwnersForDate(key) {
-
-  const dayEvents =
-    eventsForDate(key);
-
-  let leo = false;
-  let rita = false;
-
-
-  dayEvents.forEach(event => {
-
-    if (
-      event.owner === "leo" ||
-      event.owner === "both"
-    ) {
-      leo = true;
-    }
-
-    if (
-      event.owner === "rita" ||
-      event.owner === "both"
-    ) {
-      rita = true;
-    }
-
-  });
-
-
-  return { leo, rita };
-
+  let leo=false, rita=false;
+  eventsForDate(key).forEach(e=>{ if(e.owner==="leo"||e.owner==="both")leo=true; if(e.owner==="rita"||e.owner==="both")rita=true; });
+  return {leo,rita};
 }
-
-
 function profileMarker(person) {
-
-  const photo =
-    profilePhotos[person];
-
-  const letter =
-    person === "leo" ? "L" : "R";
-
-
-  if (photo) {
-
-    return `
-      <img
-        class="marker ${person}"
-        src="${photo}"
-        alt="${person}"
-      >
-    `;
-
-  }
-
-
-  return `
-    <span class="marker ${person}">
-      ${letter}
-    </span>
-  `;
-
+  const photo=profilePhotos[person], letter=person==="leo"?"L":"R";
+  return photo ? `<img class="marker ${person}" src="${photo}" alt="${person}">` : `<span class="marker ${person}">${letter}</span>`;
 }
-
 
 function renderCalendar() {
-
-  const grid =
-    document.getElementById(
-      "calendarGrid"
-    );
-
-
-  grid.innerHTML = "";
-
-
-  const year =
-    displayedMonth.getFullYear();
-
-  const month =
-    displayedMonth.getMonth();
-
-
-  document.getElementById(
-    "monthTitle"
-  ).textContent =
-    displayedMonth.toLocaleDateString(
-      "en-US",
-      {
-        month: "long",
-        year: "numeric"
-      }
-    );
-
-
-  const firstDay =
-    new Date(year, month, 1);
-
-  const startingWeekday =
-    firstDay.getDay();
-
-  const numberOfDays =
-    new Date(
-      year,
-      month + 1,
-      0
-    ).getDate();
-
-
-  for (
-    let i = 0;
-    i < startingWeekday;
-    i++
-  ) {
-
-    const blank =
-      document.createElement("div");
-
-    grid.appendChild(blank);
-
-  }
-
-
-  for (
-    let day = 1;
-    day <= numberOfDays;
-    day++
-  ) {
-
-    const date =
-      new Date(year, month, day);
-
-    const key =
-      dateKey(date);
-
-
-    const button =
-      document.createElement("button");
-
-
-    button.type = "button";
-    button.className = "day";
-
-
-    if (key === dateKey(realToday)) {
-      button.classList.add("today");
-    }
-
-
-    if (key === selectedDate) {
-      button.classList.add("selected");
-    }
-
-
-    const owners =
-      getOwnersForDate(key);
-
-
-    let markers = "";
-
-
-    if (owners.leo) {
-      markers +=
-        profileMarker("leo");
-    }
-
-
-    if (owners.rita) {
-      markers +=
-        profileMarker("rita");
-    }
-
-
-    button.innerHTML = `
-      <span>${day}</span>
-
-      ${
-        markers
-          ? `<div class="markers">
-              ${markers}
-             </div>`
-          : ""
-      }
-    `;
-
-
-    button.addEventListener(
-      "click",
-      () => {
-
-        selectedDate = key;
-
-        renderCalendar();
-        renderSelectedDate();
-
-      }
-    );
-
-
+  const grid=document.getElementById("calendarGrid"); grid.innerHTML="";
+  const year=displayedMonth.getFullYear(), month=displayedMonth.getMonth();
+  document.getElementById("monthTitle").textContent=displayedMonth.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+  const startingWeekday=new Date(year,month,1).getDay();
+  const numberOfDays=new Date(year,month+1,0).getDate();
+  for(let i=0;i<startingWeekday;i++) grid.appendChild(document.createElement("div"));
+  for(let day=1;day<=numberOfDays;day++) {
+    const date=new Date(year,month,day), key=dateKey(date), button=document.createElement("button");
+    button.type="button"; button.className="day";
+    if(key===dateKey(realToday)) button.classList.add("today");
+    if(key===selectedDate) button.classList.add("selected");
+    const owners=getOwnersForDate(key); let markers="";
+    if(owners.leo) markers+=profileMarker("leo"); if(owners.rita) markers+=profileMarker("rita");
+    button.innerHTML=`<span>${day}</span>${markers?`<div class="markers">${markers}</div>`:""}`;
+    button.addEventListener("click",()=>{selectedDate=key;renderCalendar();renderSelectedDate();});
     grid.appendChild(button);
-
   }
-
-
   renderSelectedDate();
-
 }
-
 
 function eventCard(event) {
-
-  let ownerName = "Leo";
-
-  if (event.owner === "rita") {
-    ownerName = "Rita";
-  }
-
-  if (event.owner === "both") {
-    ownerName = "Together";
-  }
-
-
-  let timeText = "";
-
-  if (event.start) {
-
-    timeText =
-      formatTime(event.start);
-
-    if (event.end) {
-
-      timeText +=
-        " – " +
-        formatTime(event.end);
-
-    }
-
-  }
-
-
-  let repeatText = "";
-
-  if (event.recurring) {
-
-    if (event.repeat === "weekly") {
-      repeatText = " • Weekly";
-    }
-
-    if (event.repeat === "biweekly") {
-      repeatText =
-        " • Every 2 weeks";
-    }
-
-    if (event.repeat === "monthly") {
-      repeatText = " • Monthly";
-    }
-
-  }
-
-
-  return `
-    <div class="event">
-
-      <div
-        class="event-line ${event.owner}"
-      ></div>
-
-      <div class="event-info">
-
-        <div class="event-title">
-          ${escapeHTML(event.title)}
-        </div>
-
-        <div class="event-meta">
-          ${ownerName}
-          ${repeatText}
-        </div>
-
-        ${
-          timeText
-            ? `<div class="event-meta">
-                ${timeText}
-               </div>`
-            : ""
-        }
-
-      </div>
-
-    </div>
-  `;
-
+  let ownerName=event.owner==="rita"?"Rita":event.owner==="both"?"Together":"Leo";
+  let timeText=""; if(event.start){timeText=formatTime(event.start);if(event.end)timeText+=" – "+formatTime(event.end);}
+  let repeatText=""; if(event.recurring){if(event.repeat==="weekly")repeatText=" • Weekly";if(event.repeat==="biweekly")repeatText=" • Every 2 weeks";if(event.repeat==="monthly")repeatText=" • Monthly";}
+  return `<div class="event"><div class="event-line ${event.owner}"></div><div class="event-info"><div class="event-title">${escapeHTML(event.title)}</div><div class="event-meta">${ownerName}${repeatText}</div>${timeText?`<div class="event-meta">${timeText}</div>`:""}</div></div>`;
 }
-
-
-function renderEventList(
-  container,
-  key
-) {
-
-  const dayEvents =
-    eventsForDate(key);
-
-
-  if (!dayEvents.length) {
-
-    container.innerHTML = `
-      <div class="empty">
-        Nothing scheduled.
-      </div>
-    `;
-
-    return;
-
-  }
-
-
-  container.innerHTML =
-    dayEvents
-      .map(eventCard)
-      .join("");
-
-}
-
-
-function renderSelectedDate() {
-
-  document.getElementById(
-    "selectedDateTitle"
-  ).textContent =
-    formatDate(selectedDate);
-
-
-  renderEventList(
-    document.getElementById(
-      "selectedEvents"
-    ),
-    selectedDate
-  );
-
-}
-
-
+function renderEventList(container,key) { const dayEvents=eventsForDate(key); container.innerHTML=dayEvents.length?dayEvents.map(eventCard).join(""):`<div class="empty">Nothing scheduled.</div>`; }
+function renderSelectedDate() { document.getElementById("selectedDateTitle").textContent=formatDate(selectedDate); renderEventList(document.getElementById("selectedEvents"),selectedDate); }
 function renderAgenda() {
-
-  const todayKey =
-    dateKey(realToday);
-
-
-  const tomorrow =
-    new Date(realToday);
-
-  tomorrow.setDate(
-    tomorrow.getDate() + 1
-  );
-
-
-  const tomorrowKey =
-    dateKey(tomorrow);
-
-
-  document.getElementById(
-    "todayDate"
-  ).textContent =
-    formatDate(todayKey);
-
-
-  document.getElementById(
-    "tomorrowDate"
-  ).textContent =
-    formatDate(tomorrowKey);
-
-
-  renderEventList(
-    document.getElementById(
-      "todayEvents"
-    ),
-    todayKey
-  );
-
-
-  renderEventList(
-    document.getElementById(
-      "tomorrowEvents"
-    ),
-    tomorrowKey
-  );
-
+  const todayKey=dateKey(realToday), tomorrow=new Date(realToday); tomorrow.setDate(tomorrow.getDate()+1); const tomorrowKey=dateKey(tomorrow);
+  document.getElementById("todayDate").textContent=formatDate(todayKey); document.getElementById("tomorrowDate").textContent=formatDate(tomorrowKey);
+  renderEventList(document.getElementById("todayEvents"),todayKey); renderEventList(document.getElementById("tomorrowEvents"),tomorrowKey);
 }
-
+function renderAll() { renderProfilePhotos(); renderCalendar(); renderAgenda(); }
 
 function showScreen(name) {
-
-  currentScreen = name;
-
-
-  document
-    .querySelectorAll(".screen")
-    .forEach(screen => {
-
-      screen.classList.remove(
-        "active"
-      );
-
-    });
-
-
-  document.getElementById(
-    name + "Screen"
-  ).classList.add("active");
-
-
-  document
-    .querySelectorAll(".nav-btn")
-    .forEach(button => {
-
-      button.classList.toggle(
-        "active",
-        button.dataset.screen === name
-      );
-
-    });
-
-
-  if (name === "calendar") {
-    renderCalendar();
-  }
-
-
-  if (
-    name === "today" ||
-    name === "tomorrow"
-  ) {
-    renderAgenda();
-  }
-
+  currentScreen=name; document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); document.getElementById(name+"Screen").classList.add("active");
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.screen===name));
+  if(name==="calendar")renderCalendar(); if(name==="today"||name==="tomorrow")renderAgenda();
 }
-
-
 function openAddEvent() {
-
-  document
-    .querySelectorAll(".screen")
-    .forEach(screen =>
-      screen.classList.remove(
-        "active"
-      )
-    );
-
-
-  document.getElementById(
-    "addScreen"
-  ).classList.add("active");
-
-
-  document.getElementById(
-    "eventDate"
-  ).value =
-    currentScreen === "calendar"
-      ? selectedDate
-      : dateKey(realToday);
-
-
-  if (
-    currentScreen === "tomorrow"
-  ) {
-
-    const tomorrow =
-      new Date(realToday);
-
-    tomorrow.setDate(
-      tomorrow.getDate() + 1
-    );
-
-    document.getElementById(
-      "eventDate"
-    ).value =
-      dateKey(tomorrow);
-
-  }
-
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); document.getElementById("addScreen").classList.add("active");
+  document.getElementById("eventDate").value=currentScreen==="calendar"?selectedDate:dateKey(realToday);
+  if(currentScreen==="tomorrow"){const t=new Date(realToday);t.setDate(t.getDate()+1);document.getElementById("eventDate").value=dateKey(t);}
+  if(currentPerson) document.getElementById("eventOwner").value=currentPerson;
 }
-
-
 function resetEventForm() {
-
-  document.getElementById(
-    "eventTitle"
-  ).value = "";
-
-  document.getElementById(
-    "startTime"
-  ).value = "";
-
-  document.getElementById(
-    "endTime"
-  ).value = "";
-
-  document.getElementById(
-    "eventNotes"
-  ).value = "";
-
-  document.getElementById(
-    "eventOwner"
-  ).value = "leo";
-
-  document.getElementById(
-    "repeatType"
-  ).value = "weekly";
-
-
-  recurring = false;
-  reminder = true;
-
-
-  document.getElementById(
-    "recurringToggle"
-  ).classList.remove("on");
-
-
-  document.getElementById(
-    "repeatOptions"
-  ).classList.remove("show");
-
-
-  document.getElementById(
-    "reminderToggle"
-  ).classList.add("on");
-
-
-  document.getElementById(
-    "reminderDescription"
-  ).textContent =
-    "Automatically on for one-time events.";
-
+  ["eventTitle","startTime","endTime","eventNotes"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("eventOwner").value=currentPerson||"leo"; document.getElementById("repeatType").value="weekly"; recurring=false; reminder=true;
+  document.getElementById("recurringToggle").classList.remove("on"); document.getElementById("repeatOptions").classList.remove("show"); document.getElementById("reminderToggle").classList.add("on");
+  document.getElementById("reminderDescription").textContent="Automatically on for one-time events.";
 }
 
-
-document.getElementById(
-  "previousMonth"
-).addEventListener(
-  "click",
-  () => {
-
-    displayedMonth =
-      new Date(
-        displayedMonth.getFullYear(),
-        displayedMonth.getMonth() - 1,
-        1
-      );
-
-    renderCalendar();
-
-  }
-);
-
-
-document.getElementById(
-  "nextMonth"
-).addEventListener(
-  "click",
-  () => {
-
-    displayedMonth =
-      new Date(
-        displayedMonth.getFullYear(),
-        displayedMonth.getMonth() + 1,
-        1
-      );
-
-    renderCalendar();
-
-  }
-);
-
-
-document
-  .querySelectorAll(".nav-btn")
-  .forEach(button => {
-
-    button.addEventListener(
-      "click",
-      () => {
-
-        showScreen(
-          button.dataset.screen
-        );
-
-      }
-    );
-
-  });
-
-
-document.getElementById(
-  "addEventButton"
-).addEventListener(
-  "click",
-  openAddEvent
-);
-
-
-document.getElementById(
-  "cancelAdd"
-).addEventListener(
-  "click",
-  () => {
-
-    resetEventForm();
-    showScreen(currentScreen);
-
-  }
-);
-
-
-document.getElementById(
-  "recurringToggle"
-).addEventListener(
-  "click",
-  function () {
-
-    recurring = !recurring;
-
-    this.classList.toggle(
-      "on",
-      recurring
-    );
-
-
-    document.getElementById(
-      "repeatOptions"
-    ).classList.toggle(
-      "show",
-      recurring
-    );
-
-
-    /*
-      Our rule:
-      One-time = reminder ON.
-      Recurring = reminder OFF.
-    */
-
-    reminder = !recurring;
-
-
-    document.getElementById(
-      "reminderToggle"
-    ).classList.toggle(
-      "on",
-      reminder
-    );
-
-
-    document.getElementById(
-      "reminderDescription"
-    ).textContent =
-      recurring
-        ? "Off automatically for recurring events."
-        : "Automatically on for one-time events.";
-
-  }
-);
-
-
-document.getElementById(
-  "reminderToggle"
-).addEventListener(
-  "click",
-  function () {
-
-    reminder = !reminder;
-
-    this.classList.toggle(
-      "on",
-      reminder
-    );
-
-  }
-);
-
-
-document.getElementById(
-  "saveEvent"
-).addEventListener(
-  "click",
-  () => {
-
-    const title =
-      document.getElementById(
-        "eventTitle"
-      ).value.trim();
-
-
-    const date =
-      document.getElementById(
-        "eventDate"
-      ).value;
-
-
-    const start =
-      document.getElementById(
-        "startTime"
-      ).value;
-
-
-    const end =
-      document.getElementById(
-        "endTime"
-      ).value;
-
-
-    if (!title) {
-
-      alert(
-        "Give the event a name first."
-      );
-
-      return;
-
-    }
-
-
-    if (!date) {
-
-      alert(
-        "Choose a date."
-      );
-
-      return;
-
-    }
-
-
-    if (
-      start &&
-      end &&
-      end <= start
-    ) {
-
-      alert(
-        "The end time needs to be after the start time."
-      );
-
-      return;
-
-    }
-
-
-    const event = {
-
-      id:
-        Date.now().toString(),
-
-      title,
-
-      owner:
-        document.getElementById(
-          "eventOwner"
-        ).value,
-
-      date,
-
-      start,
-
-      end,
-
-      notes:
-        document.getElementById(
-          "eventNotes"
-        ).value.trim(),
-
-      recurring,
-
-      repeat:
-        recurring
-          ? document.getElementById(
-              "repeatType"
-            ).value
-          : null,
-
-      reminder,
-
-      exceptions: []
-
-    };
-
-
-    events.push(event);
-
-    saveEvents();
-
-
-    selectedDate = date;
-
-
-    const selected =
-      parseDate(date);
-
-
-    displayedMonth =
-      new Date(
-        selected.getFullYear(),
-        selected.getMonth(),
-        1
-      );
-
-
-    resetEventForm();
-
-    showScreen("calendar");
-
-  }
-);
-
-
-/*
-  SETTINGS
-*/
-
-document.getElementById(
-  "settingsButton"
-).addEventListener(
-  "click",
-  () => {
-
-    document
-      .querySelectorAll(".screen")
-      .forEach(screen =>
-        screen.classList.remove(
-          "active"
-        )
-      );
-
-
-    document.getElementById(
-      "settingsScreen"
-    ).classList.add("active");
-
-  }
-);
-
-
-document.getElementById(
-  "closeSettings"
-).addEventListener(
-  "click",
-  () => {
-
-    showScreen("calendar");
-
-  }
-);
-
-
-/*
-  PROFILE PHOTOS
-*/
+document.getElementById("previousMonth").addEventListener("click",()=>{displayedMonth=new Date(displayedMonth.getFullYear(),displayedMonth.getMonth()-1,1);renderCalendar();});
+document.getElementById("nextMonth").addEventListener("click",()=>{displayedMonth=new Date(displayedMonth.getFullYear(),displayedMonth.getMonth()+1,1);renderCalendar();});
+document.querySelectorAll(".nav-btn").forEach(b=>b.addEventListener("click",()=>showScreen(b.dataset.screen)));
+document.getElementById("addEventButton").addEventListener("click",openAddEvent);
+document.getElementById("cancelAdd").addEventListener("click",()=>{resetEventForm();showScreen(currentScreen);});
+document.getElementById("recurringToggle").addEventListener("click",function(){
+  recurring=!recurring;this.classList.toggle("on",recurring);document.getElementById("repeatOptions").classList.toggle("show",recurring);reminder=!recurring;document.getElementById("reminderToggle").classList.toggle("on",reminder);document.getElementById("reminderDescription").textContent=recurring?"Off automatically for recurring events.":"Automatically on for one-time events.";
+});
+document.getElementById("reminderToggle").addEventListener("click",function(){reminder=!reminder;this.classList.toggle("on",reminder);});
+
+document.getElementById("saveEvent").addEventListener("click",async()=>{
+  if(!currentUser)return;
+  const title=document.getElementById("eventTitle").value.trim(), date=document.getElementById("eventDate").value, start=document.getElementById("startTime").value, end=document.getElementById("endTime").value;
+  if(!title){alert("Give the event a name first.");return;} if(!date){alert("Choose a date.");return;} if(start&&end&&end<=start){alert("The end time needs to be after the start time.");return;}
+  const button=document.getElementById("saveEvent"); button.disabled=true; button.textContent="Saving…";
+  try {
+    await addDoc(collection(db,"events"),{title,owner:document.getElementById("eventOwner").value,date,start,end,notes:document.getElementById("eventNotes").value.trim(),recurring,repeat:recurring?document.getElementById("repeatType").value:null,reminder,exceptions:[],createdBy:currentUser.uid,createdAt:serverTimestamp()});
+    selectedDate=date; const selected=parseDate(date); displayedMonth=new Date(selected.getFullYear(),selected.getMonth(),1); resetEventForm(); showScreen("calendar");
+  } catch(error){console.error(error);alert("R&L couldn't save that event. Check your Firestore rules and internet connection.");}
+  finally {button.disabled=false;button.textContent="Add to R&L";}
+});
+
+document.getElementById("settingsButton").addEventListener("click",()=>{document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));document.getElementById("settingsScreen").classList.add("active");});
+document.getElementById("closeSettings").addEventListener("click",()=>showScreen("calendar"));
 
 function renderProfilePhotos() {
+  const leo=document.getElementById("leoPhotoPreview"), rita=document.getElementById("ritaPhotoPreview");
+  leo.innerHTML=profilePhotos.leo?`<img src="${profilePhotos.leo}" style="width:100%;height:100%;object-fit:cover;" alt="Leo">`:"L";
+  rita.innerHTML=profilePhotos.rita?`<img src="${profilePhotos.rita}" style="width:100%;height:100%;object-fit:cover;" alt="Rita">`:"R";
+}
+async function handlePhoto(person,file) {
+  if(!file)return; if(!file.type.startsWith("image/")){alert("Please choose a picture.");return;}
+  const reader=new FileReader();
+  reader.onload=event=>{const image=new Image();image.onload=async()=>{
+    const canvas=document.createElement("canvas"),size=350;canvas.width=size;canvas.height=size;const ctx=canvas.getContext("2d");const sourceSize=Math.min(image.width,image.height),sourceX=(image.width-sourceSize)/2,sourceY=(image.height-sourceSize)/2;ctx.drawImage(image,sourceX,sourceY,sourceSize,sourceSize,0,0,size,size);const compressed=canvas.toDataURL("image/jpeg",0.72);
+    try { await setDoc(doc(db,"shared","profiles"),{[person+"Photo"]:compressed},{merge:true}); profilePhotos[person]=compressed; localStorage.setItem(person==="leo"?STORAGE_LEO_PHOTO:STORAGE_RITA_PHOTO,compressed); renderAll(); }
+    catch(error){console.error(error);alert("R&L couldn't sync that photo.");}
+  };image.src=event.target.result;};reader.readAsDataURL(file);
+}
+document.getElementById("changeLeoPhoto").addEventListener("click",()=>document.getElementById("leoPhotoInput").click());
+document.getElementById("changeRitaPhoto").addEventListener("click",()=>document.getElementById("ritaPhotoInput").click());
+document.getElementById("leoPhotoInput").addEventListener("change",e=>handlePhoto("leo",e.target.files[0]));
+document.getElementById("ritaPhotoInput").addEventListener("change",e=>handlePhoto("rita",e.target.files[0]));
 
-  const leo =
-    document.getElementById(
-      "leoPhotoPreview"
-    );
-
-  const rita =
-    document.getElementById(
-      "ritaPhotoPreview"
-    );
-
-
-  if (profilePhotos.leo) {
-
-    leo.innerHTML = `
-      <img
-        src="${profilePhotos.leo}"
-        style="
-          width:100%;
-          height:100%;
-          object-fit:cover;
-        "
-        alt="Leo"
-      `;
-
-  } else {
-
-    leo.textContent = "L";
-
-  }
-
-
-  if (profilePhotos.rita) {
-
-    rita.innerHTML = `
-      <img
-        src="${profilePhotos.rita}"
-        style="
-          width:100%;
-          height:100%;
-          object-fit:cover;
-        "
-        alt="Rita"
-      `;
-
-  } else {
-
-    rita.textContent = "R";
-
-  }
-
+function startRealtimeSync() {
+  if(unsubscribeEvents)unsubscribeEvents(); if(unsubscribeProfiles)unsubscribeProfiles();
+  setSyncStatus("Syncing with R&L…");
+  unsubscribeEvents=onSnapshot(query(collection(db,"events"),orderBy("date")),snapshot=>{events=snapshot.docs.map(d=>({id:d.id,...d.data()}));renderAll();setSyncStatus("Synced • changes appear on both phones");},error=>{console.error(error);setSyncStatus("Sync error — check Firestore rules");});
+  unsubscribeProfiles=onSnapshot(doc(db,"shared","profiles"),snapshot=>{if(snapshot.exists()){const d=snapshot.data();if(d.leoPhoto)profilePhotos.leo=d.leoPhoto;if(d.ritaPhoto)profilePhotos.rita=d.ritaPhoto;renderAll();}},error=>console.error(error));
 }
 
+async function loadIdentity(user) {
+  const ref=doc(db,"profiles",user.uid), snap=await getDoc(ref);
+  if(snap.exists() && ["leo","rita"].includes(snap.data().person)) { currentPerson=snap.data().person; return true; }
+  return false;
+}
+async function chooseIdentity(person) {
+  if(!currentUser)return;
+  try {
+    await setDoc(doc(db,"profiles",currentUser.uid),{person,email:currentUser.email||"",updatedAt:serverTimestamp()},{merge:true});
+    currentPerson=person; document.getElementById("identityPanel").style.display="none"; finishSignedIn();
+  } catch(error){console.error(error);document.getElementById("identityError").textContent="Couldn't save your profile. Check Firestore rules.";}
+}
+document.querySelectorAll(".identity-btn").forEach(b=>b.addEventListener("click",()=>chooseIdentity(b.dataset.person)));
 
-function handlePhoto(
-  person,
-  file
-) {
-
-  if (!file) return;
-
-
-  if (!file.type.startsWith("image/")) {
-
-    alert(
-      "Please choose a picture."
-    );
-
-    return;
-
-  }
-
-
-  const reader =
-    new FileReader();
-
-
-  reader.onload =
-    event => {
-
-      const image =
-        new Image();
-
-
-      image.onload = () => {
-
-        /*
-          Resize the photo so local storage
-          doesn't get filled by a huge
-          iPhone photo.
-        */
-
-        const canvas =
-          document.createElement(
-            "canvas"
-          );
-
-
-        const size = 350;
-
-        canvas.width = size;
-        canvas.height = size;
-
-
-        const ctx =
-          canvas.getContext("2d");
-
-
-        const sourceSize =
-          Math.min(
-            image.width,
-            image.height
-          );
-
-
-        const sourceX =
-          (image.width -
-            sourceSize) / 2;
-
-
-        const sourceY =
-          (image.height -
-            sourceSize) / 2;
-
-
-        ctx.drawImage(
-          image,
-          sourceX,
-          sourceY,
-          sourceSize,
-          sourceSize,
-          0,
-          0,
-          size,
-          size
-        );
-
-
-        const compressed =
-          canvas.toDataURL(
-            "image/jpeg",
-            0.78
-          );
-
-
-        profilePhotos[person] =
-          compressed;
-
-
-        if (person === "leo") {
-
-          localStorage.setItem(
-            STORAGE_LEO_PHOTO,
-            compressed
-          );
-
-        } else {
-
-          localStorage.setItem(
-            STORAGE_RITA_PHOTO,
-            compressed
-          );
-
-        }
-
-
-        renderProfilePhotos();
-        renderCalendar();
-
-      };
-
-
-      image.src =
-        event.target.result;
-
-    };
-
-
-  reader.readAsDataURL(file);
-
+function finishSignedIn() {
+  document.getElementById("authGate").classList.add("hidden"); document.getElementById("mainApp").style.visibility="visible"; document.getElementById("bottomNav").style.display="grid";
+  document.getElementById("signedInAs").textContent=`Signed in as ${currentPerson==="rita"?"Rita":"Leo"}${currentUser?.email?" • "+currentUser.email:""}`;
+  document.getElementById("eventOwner").value=currentPerson||"leo"; startRealtimeSync(); renderAll();
 }
 
+document.getElementById("loginButton").addEventListener("click",async()=>{
+  const email=document.getElementById("loginEmail").value.trim(),password=document.getElementById("loginPassword").value,errorBox=document.getElementById("loginError");errorBox.textContent="";
+  if(!email||!password){errorBox.textContent="Enter your email and password.";return;}
+  const btn=document.getElementById("loginButton");btn.disabled=true;btn.textContent="Signing in…";
+  try{await signInWithEmailAndPassword(auth,email,password);}catch(error){console.error(error);errorBox.textContent="That email or password didn't work.";}finally{btn.disabled=false;btn.textContent="Sign in";}
+});
+document.getElementById("loginPassword").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("loginButton").click();});
+document.getElementById("signOutButton").addEventListener("click",()=>signOut(auth));
 
-document.getElementById(
-  "changeLeoPhoto"
-).addEventListener(
-  "click",
-  () => {
-
-    document.getElementById(
-      "leoPhotoInput"
-    ).click();
-
+onAuthStateChanged(auth,async user=>{
+  currentUser=user;
+  if(!user){
+    currentPerson=null;events=[];if(unsubscribeEvents)unsubscribeEvents();if(unsubscribeProfiles)unsubscribeProfiles();document.getElementById("authGate").classList.remove("hidden");document.getElementById("loginPanel").style.display="block";document.getElementById("identityPanel").style.display="none";document.getElementById("mainApp").style.visibility="hidden";document.getElementById("bottomNav").style.display="none";return;
   }
-);
+  document.getElementById("loginPanel").style.display="none";
+  try { const known=await loadIdentity(user); if(known)finishSignedIn(); else document.getElementById("identityPanel").style.display="block"; }
+  catch(error){console.error(error);document.getElementById("identityPanel").style.display="block";document.getElementById("identityError").textContent="Choose your profile to finish setup.";}
+});
 
-
-document.getElementById(
-  "changeRitaPhoto"
-).addEventListener(
-  "click",
-  () => {
-
-    document.getElementById(
-      "ritaPhotoInput"
-    ).click();
-
-  }
-);
-
-
-document.getElementById(
-  "leoPhotoInput"
-).addEventListener(
-  "change",
-  event => {
-
-    handlePhoto(
-      "leo",
-      event.target.files[0]
-    );
-
-  }
-);
-
-
-document.getElementById(
-  "ritaPhotoInput"
-).addEventListener(
-  "change",
-  event => {
-
-    handlePhoto(
-      "rita",
-      event.target.files[0]
-    );
-
-  }
-);
-
-
-/*
-  START APP
-*/
-
-renderProfilePhotos();
-renderCalendar();
-renderAgenda();
-
+renderProfilePhotos(); renderCalendar(); renderAgenda();
 </script>
 
 </body>
