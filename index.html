@@ -1272,6 +1272,20 @@
 
     </div>
 
+
+    <div class="settings-card">
+      <h2>Notifications 🔔</h2>
+      <p class="small-muted">
+        Allow R&amp;L to send event reminders to this device.
+      </p>
+      <button type="button" class="primary-btn" id="enableNotificationsBtn">
+        Enable Notifications
+      </button>
+      <div class="notification-status" id="notificationStatus">
+        Not enabled on this device.
+      </div>
+    </div>
+
     <div class="settings-card">
       <h2>Account</h2>
       <div class="small-muted" id="signedInAs">Signed in</div>
@@ -1330,6 +1344,8 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
+const VAPID_KEY = "BKStT4dOCFLVgwYTzPQigZ2GgszJk0aISvsV2D0r67WHl7YC1VChmyRWMcAWKTLtivcvzS5B9in1_l66H2GFWvs";
+let messaging = null;
 
 const STORAGE_LEO_PHOTO = "rl_leo_photo";
 const STORAGE_RITA_PHOTO = "rl_rita_photo";
@@ -1913,7 +1929,7 @@ async function enablePushNotifications() {
     const registration=await navigator.serviceWorker.register("./firebase-messaging-sw.js");
     await navigator.serviceWorker.ready;
 
-    messaging=getMessaging(app);
+    messaging=getMessaging(firebaseApp);
     const token=await getToken(messaging,{
       vapidKey:VAPID_KEY,
       serviceWorkerRegistration:registration
