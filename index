@@ -1045,12 +1045,21 @@ function renderProfilePhotos() {
   rita.innerHTML=profilePhotos.rita?`<img src="${profilePhotos.rita}" style="width:100%;height:100%;object-fit:cover;" alt="Rita">`:"R";
 }
 async function handlePhoto(person,file) {
-  if(!file)return; if(!file.type.startsWith("image/")){alert("Please choose a picture.");return;}
+  if(!file)return;
+  if(!currentUser || currentPerson !== person){
+    alert(`Sign in as ${person === "leo" ? "Leo" : "Rita"} to change this picture.`);
+    return;
+  }
+  if(!file.type.startsWith("image/")){alert("Please choose a picture.");return;}
   const reader=new FileReader();
   reader.onload=event=>{const image=new Image();image.onload=async()=>{
     const canvas=document.createElement("canvas"),size=350;canvas.width=size;canvas.height=size;const ctx=canvas.getContext("2d");const sourceSize=Math.min(image.width,image.height),sourceX=(image.width-sourceSize)/2,sourceY=(image.height-sourceSize)/2;ctx.drawImage(image,sourceX,sourceY,sourceSize,sourceSize,0,0,size,size);const compressed=canvas.toDataURL("image/jpeg",0.72);
-    try { await setDoc(doc(db,"shared","profiles"),{[person+"Photo"]:compressed},{merge:true}); profilePhotos[person]=compressed; localStorage.setItem(person==="leo"?STORAGE_LEO_PHOTO:STORAGE_RITA_PHOTO,compressed); renderAll(); }
-    catch(error){console.error(error);alert("R&L couldn't sync that photo.");}
+    try {
+      await setDoc(doc(db,"profiles",currentUser.uid),{person,photo:compressed,updatedAt:serverTimestamp()},{merge:true});
+      profilePhotos[person]=compressed;
+      localStorage.setItem(person==="leo"?STORAGE_LEO_PHOTO:STORAGE_RITA_PHOTO,compressed);
+      renderAll();
+    } catch(error){console.error(error);alert("R&L couldn't sync that photo.");}
   };image.src=event.target.result;};reader.readAsDataURL(file);
 }
 document.getElementById("changeLeoPhoto").addEventListener("click",()=>document.getElementById("leoPhotoInput").click());
@@ -1059,10 +1068,37 @@ document.getElementById("leoPhotoInput").addEventListener("change",e=>handlePhot
 document.getElementById("ritaPhotoInput").addEventListener("change",e=>handlePhoto("rita",e.target.files[0]));
 
 function startRealtimeSync() {
-  if(unsubscribeEvents)unsubscribeEvents(); if(unsubscribeProfiles)unsubscribeProfiles();
+  if(unsubscribeEvents)unsubscribeEvents();
+  if(unsubscribeProfiles)unsubscribeProfiles();
   setSyncStatus("Syncing with R&L…");
-  unsubscribeEvents=onSnapshot(query(collection(db,"events"),orderBy("date")),snapshot=>{events=snapshot.docs.map(d=>({id:d.id,...d.data()}));renderAll();setSyncStatus("Synced • changes appear on both phones");},error=>{console.error(error);setSyncStatus("Sync error — check Firestore rules");});
-  unsubscribeProfiles=onSnapshot(doc(db,"shared","profiles"),snapshot=>{if(snapshot.exists()){const d=snapshot.data();if(d.leoPhoto)profilePhotos.leo=d.leoPhoto;if(d.ritaPhoto)profilePhotos.rita=d.ritaPhoto;renderAll();}},error=>console.error(error));
+
+  unsubscribeEvents=onSnapshot(
+    query(collection(db,"events"),orderBy("date")),
+    snapshot=>{
+      events=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+      renderAll();
+      setSyncStatus("Synced • changes appear on both phones");
+    },
+    error=>{
+      console.error(error);
+      setSyncStatus("Sync error — check Firestore rules");
+    }
+  );
+
+  unsubscribeProfiles=onSnapshot(
+    collection(db,"profiles"),
+    snapshot=>{
+      snapshot.docs.forEach(profileDoc=>{
+        const data=profileDoc.data();
+        if(["leo","rita"].includes(data.person) && data.photo){
+          profilePhotos[data.person]=data.photo;
+          localStorage.setItem(data.person==="leo"?STORAGE_LEO_PHOTO:STORAGE_RITA_PHOTO,data.photo);
+        }
+      });
+      renderAll();
+    },
+    error=>console.error(error)
+  );
 }
 
 async function loadIdentity(user) {
